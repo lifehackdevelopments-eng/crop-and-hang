@@ -1,0 +1,1725 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<title>Crop and Hang by StudioAi.life</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Free tool for artists: drop in photos of your artworks and Crop and Hang finds, straightens and crops each piece, then hangs them on a wall or in a room. By StudioAi.life.">
+<meta property="og:title" content="Crop and Hang by StudioAi.life">
+<meta property="og:description" content="Photo of your artwork in, straightened and hung on a wall out. Free.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23FF5B1F'/%3E%3Crect x='16' y='16' width='32' height='32' fill='none' stroke='%23fff' stroke-width='5'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Source+Sans+3:wght@400;600;700&display=swap">
+<style>
+  /* Layout: one column tool. Header, then the wall as the hero, then controls, then the strip of cropped pieces. */
+  :root {
+    --bg: #F2F1EF;
+    --panel: #FFFFFF;
+    --fg: #17161B;
+    --muted: #666470;
+    --line: #D9D7D3;
+    --accent: #FF5B1F;
+    --accent-ink: #1B0B03;
+    --warn: #A94E00;
+    --ok: #1E7A4C;
+    --focus: #1B5BFF;
+    --font-display: "Anton", "Arial Narrow", Impact, sans-serif;
+    --font-body: "Source Sans 3", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121116; --panel: #1C1B22; --fg: #F2F0EE; --muted: #A5A2AD; --line: #302E38;
+      --accent: #FF6A33; --accent-ink: #1B0B03; --warn: #F5A64B; --ok: #4CC38A; --focus: #7FA2FF;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #121116; --panel: #1C1B22; --fg: #F2F0EE; --muted: #A5A2AD; --line: #302E38;
+    --accent: #FF6A33; --accent-ink: #1B0B03; --warn: #F5A64B; --ok: #4CC38A; --focus: #7FA2FF;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font-family: var(--font-body); font-size: 15px; line-height: 1.45;
+  }
+  .wrap { max-width: 980px; margin-inline: auto; padding-inline: 16px; padding-block: 20px 40px; display: flex; flex-direction: column; gap: 18px; }
+
+  header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 10px 24px; }
+  h1 { font-family: var(--font-display); font-weight: 400; font-size: clamp(2.2rem, 8vw, 3.4rem); line-height: 0.95; margin: 0; letter-spacing: 0.01em; text-transform: uppercase; }
+  .brand { display:block; font-weight:700; font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); text-decoration:none; margin-bottom:6px; }
+  .brand:hover { text-decoration:underline; }
+  .foot a { color: var(--fg); }
+  .tag { margin: 0; color: var(--muted); max-width: 46ch; }
+
+  .pick { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; }
+  button, .btn {
+    font: inherit; font-weight: 700; cursor: pointer; border-radius: 10px; border: 2px solid var(--fg);
+    background: transparent; color: var(--fg); padding: 11px 18px; min-height: 46px;
+  }
+  .vh { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; pointer-events: none; }
+  [hidden] { display: none !important; }
+  label.btn { display: inline-flex; align-items: center; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+  label.btn.off { opacity: .5; pointer-events: none; }
+  label.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  button:hover:not(:disabled) { background: var(--fg); color: var(--bg); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  button.primary:hover:not(:disabled) { background: var(--accent); color: var(--accent-ink); filter: brightness(1.08); }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+  #status { color: var(--muted); min-height: 1.4em; }
+  #status.busy { color: var(--fg); }
+
+  .stage { position: relative; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: var(--panel); }
+  #wall { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; }
+  .stage.drag { outline: 3px dashed var(--accent); outline-offset: -8px; }
+  .sample-note {
+    position: absolute; left: 10px; top: 10px; background: var(--fg); color: var(--bg);
+    font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    padding: 5px 9px; border-radius: 6px;
+  }
+
+  .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px 24px; align-items: start; }
+  fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+  legend, .lbl { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding: 0; margin-bottom: 8px; display: block; }
+  .swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+  .swatches label { position: relative; cursor: pointer; }
+  .swatches input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+  .swatches span { display: block; width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--line); }
+  .swatches input:checked + span { border-color: var(--fg); box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--fg); }
+  .swatches input:focus-visible + span { outline: 3px solid var(--focus); outline-offset: 4px; }
+  .seg { display: inline-flex; border: 2px solid var(--fg); border-radius: 10px; overflow: hidden; }
+  .seg label { position: relative; cursor: pointer; }
+  .seg input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+  #roomFs { grid-column: 1 / -1; }
+  #roomSeg { display: flex; flex-wrap: wrap; max-width: 100%; }
+  #roomSeg span { white-space: nowrap; }
+  .seg span { display: block; padding: 9px 14px; font-weight: 700; }
+  .seg input:checked + span { background: var(--fg); color: var(--bg); }
+  .seg input:focus-visible + span { outline: 3px solid var(--focus); outline-offset: -3px; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .hint { color: var(--muted); font-size: 13px; margin: 4px 0 0; }
+
+  .actions { display: flex; flex-wrap: wrap; gap: 12px; }
+
+  #strip { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(172px, 1fr)); gap: 12px; }
+  #strip li { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 6px; min-width: 0; position: relative; }
+  #strip canvas { width: 100%; aspect-ratio: 1; object-fit: contain; display: block; background: var(--bg); border-radius: 4px; }
+  .nm { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .badge { font-size: 12px; font-weight: 700; }
+  .badge.ok { color: var(--ok); }
+  .badge.warn { color: var(--warn); }
+  .x { position: absolute; top: 4px; right: 4px; width: 32px; height: 32px; min-height: 0; padding: 0; border-radius: 50%; border-width: 1px; background: var(--panel); line-height: 1; font-size: 16px; }
+  #strip .thumb { padding: 0; min-height: 0; border: 2px solid transparent; background: none; color: inherit; display: block; width: 100%; border-radius: 6px; }
+  #strip .thumb:hover:not(:disabled) { background: none; color: inherit; border-color: var(--line); }
+  #strip .thumb:disabled { opacity: 1; cursor: default; }
+  #strip li.sel { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .stage.room { max-width: 720px; margin-inline: auto; width: 100%; }
+  .dims { display: flex; align-items: center; gap: 4px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
+  .ttl { width: 100%; min-height: 38px; padding: 4px 8px; margin: 4px 0 6px; font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; box-sizing: border-box; }
+  .dims input { width: 54px; min-height: 36px; padding: 4px 6px; font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; }
+  .adj { font-size: 13px; padding: 6px 10px; min-height: 36px; border-width: 1px; align-self: flex-start; }
+  .ed { position: fixed; inset: 0; z-index: 10; background: rgba(8,8,10,0.78); display: flex; align-items: center; justify-content: center; padding: 12px; padding-top: calc(12px + env(safe-area-inset-top, 0px)); padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+  .ed[hidden] { display: none; }
+  .zoom-row { display: flex; align-items: center; gap: 12px; }
+  .zoom-row input { flex: 1; }
+  #rfCanvas { cursor: grab; }
+  .ed-box { background: var(--panel); border-radius: 12px; padding: 14px; max-width: 780px; width: 100%; max-height: 100%; overflow: auto; display: flex; flex-direction: column; gap: 12px; }
+  .ed-title { margin: 0; font-weight: 700; }
+  .ed canvas { display: block; width: 100%; height: auto; touch-action: none; border-radius: 6px; cursor: grab; }
+  .ed-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+  .foot { color: var(--muted); font-size: 13px; margin: 0; }
+  #toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-weight: 700; z-index: 5; }
+  @media (prefers-reduced-motion: no-preference) { button { transition: background 0.12s, color 0.12s, filter 0.12s; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div><a class="brand" href="https://studioai.life" target="_blank" rel="noopener">StudioAi.life</a>
+    <h1>Crop and Hang</h1></div>
+    <p class="tag">Pick your photos of the art. It finds each frame, straightens it, crops it, then hangs the lot on a wall or in a room.</p>
+  </header>
+
+  <div class="pick">
+    <label class="btn primary" id="pickBtn" for="file">Pick photos</label>
+    <label class="btn" id="camBtn" for="cam" hidden>Take photo</label>
+    <input type="file" id="file" class="vh" accept="image/*" multiple>
+    <input type="file" id="cam" class="vh" accept="image/*" capture="environment">
+    <span id="status" role="status" aria-live="polite">Photos stay on your device. Nothing is uploaded.</span>
+  </div>
+
+  <div class="stage" id="stage">
+    <canvas id="wall" width="2400" height="1600" aria-label="Your art hung on a wall"></canvas>
+    <div class="sample-note" id="sampleNote">Example art. Pick your photos to swap it out.</div>
+  </div>
+
+  <p class="hint" id="roomNote" hidden></p>
+  <p class="hint" id="roomMoveRow" hidden><button type="button" class="adj" id="roomReset">Put the art back</button></p>
+  <div class="controls">
+    <fieldset>
+      <legend>View</legend>
+      <div class="seg">
+        <label><input type="radio" name="view" id="viewWall" value="wall" checked><span>Gallery wall</span></label>
+        <label><input type="radio" name="view" id="viewRoom" value="room"><span>In a room</span></label>
+      </div>
+    </fieldset>
+    <fieldset id="roomFs" hidden>
+      <legend>Room</legend>
+      <div class="seg" id="roomSeg"></div>
+      <div class="dims" style="margin-top:10px">
+        <label class="btn adj" id="addRoom" for="roomFile">Add your own room photo</label>
+        <button type="button" class="adj" id="delRoom" hidden>Delete this room</button>
+        <input type="file" id="roomFile" class="vh" accept="image/*">
+      </div>
+    </fieldset>
+    <fieldset id="wallFs">
+      <legend>Wall</legend>
+      <div class="swatches" id="swatches"></div>
+    </fieldset>
+    <fieldset>
+      <legend>Frame</legend>
+      <div class="swatches" id="frames"></div>
+      <p class="hint" id="frameName">Original timber, as photographed</p>
+    </fieldset>
+    <div>
+      <label class="lbl" for="trim">Trim edges</label>
+      <input type="range" id="trim" min="0" max="5" step="0.1" value="1.2">
+      <p class="hint">Nudge up if a sliver of frame or shadow shows.</p>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button type="button" class="primary" id="saveWall" disabled>Save wall picture</button>
+    <button type="button" id="saveRoomZip" disabled hidden>Save room pictures, all (zip)</button>
+    <button type="button" id="saveZip" disabled>Save print-size images (zip)</button>
+  </div>
+
+  <ul id="strip" aria-label="Cropped pieces"></ul>
+  <p class="foot">Frames are found automatically. For canvases with no frame, tap Adjust crop and drag the four corners onto the art. Set each piece's real size under its photo and the wall and room are drawn to scale.</p>
+  <p class="foot" id="ver" style="opacity:.85">Crop and Hang version 22 (5 Oct 2026) · A free tool from <a href="https://studioai.life" target="_blank" rel="noopener">StudioAi.life</a> · Your photos stay on your device, nothing is uploaded.</p>
+</div>
+<div id="toast" hidden></div>
+<div class="ed" id="place" hidden role="dialog" aria-modal="true" aria-labelledby="plTitle">
+  <div class="ed-box">
+    <p class="ed-title" id="plTitle">Tap where the art should hang, then slide until the box is the size of a 30 cm piece</p>
+    <canvas id="plCanvas" width="10" height="10"></canvas>
+    <div class="zoom-row">
+      <label for="plSize">Size</label>
+      <input type="range" id="plSize" min="3" max="40" step="0.1" value="14">
+    </div>
+    <div class="zoom-row">
+      <label for="plName">Name</label>
+      <input type="text" id="plName" value="My room" maxlength="40" style="flex:1;min-height:40px;padding:6px 10px;font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px">
+    </div>
+    <div class="ed-actions">
+      <button type="button" class="primary" id="plDone">Save this room</button>
+      <button type="button" id="plCancel">Cancel</button>
+    </div>
+  </div>
+</div>
+<div class="ed" id="reframe" hidden role="dialog" aria-modal="true" aria-labelledby="rfTitle">
+  <div class="ed-box">
+    <p class="ed-title" id="rfTitle">Drag to move the picture, slide to zoom</p>
+    <canvas id="rfCanvas" width="10" height="10"></canvas>
+    <div class="zoom-row">
+      <label for="rfZoom">Zoom</label>
+      <input type="range" id="rfZoom" min="1" max="4" step="0.01" value="1">
+      <span id="rfVal">1.0\u00D7</span>
+    </div>
+    <div class="ed-actions">
+      <button type="button" class="primary" id="rfDone">Use this</button>
+      <button type="button" id="rfReset">Reset</button>
+      <button type="button" id="rfCancel">Cancel</button>
+    </div>
+  </div>
+</div>
+<div class="ed" id="editor" hidden role="dialog" aria-modal="true" aria-labelledby="edTitle">
+  <div class="ed-box">
+    <p class="ed-title" id="edTitle">Drag the four corners onto the corners of the art</p>
+    <canvas id="edCanvas" width="10" height="10"></canvas>
+    <div class="ed-actions">
+      <button type="button" class="primary" id="edDone">Use this crop</button>
+      <button type="button" id="edCancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const MAX_SRC = 4096;     // longest side we work from
+  const MAX_RECT = 1800;    // longest side of a straightened piece
+  const DET = 900;          // longest side used for frame detection
+
+  /* ---------------- colour test for the timber frame ---------------- */
+  function timberPx(r, g, b) {
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    if (mx < 105 || mx !== r) return false;
+    const d = mx - mn;
+    if (d < 32) return false;
+    const sat = d / mx;
+    if (sat < 0.2 || sat > 0.64) return false;
+    const hue = ((g - b) / d) * 60;
+    return hue >= 14 && hue <= 50;
+  }
+
+  function open3(m, w, h) {
+    const e = new Uint8Array(w * h), d = new Uint8Array(w * h);
+    for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x;
+      if (m[i] && m[i - 1] && m[i + 1] && m[i - w] && m[i + w] && m[i - w - 1] && m[i - w + 1] && m[i + w - 1] && m[i + w + 1]) e[i] = 1;
+    }
+    for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x;
+      if (e[i] | e[i - 1] | e[i + 1] | e[i - w] | e[i + w] | e[i - w - 1] | e[i - w + 1] | e[i + w - 1] | e[i + w + 1]) d[i] = 1;
+    }
+    return d;
+  }
+
+  /* Find the frame: biggest timber-coloured ring whose four outer edges are actually lined with timber. */
+  function detectQuad(sw, sh, data) {
+    const n = sw * sh;
+    const raw = new Uint8Array(n);
+    for (let i = 0; i < n; i++) raw[i] = timberPx(data[i * 4], data[i * 4 + 1], data[i * 4 + 2]) ? 1 : 0;
+    const m = open3(raw, sw, sh);
+    const lab = new Uint8Array(n);
+    const order = new Int32Array(n);
+    let oc = 0;
+    const comps = [];
+    for (let s = 0; s < n; s++) {
+      if (!m[s] || lab[s]) continue;
+      const start = oc;
+      order[oc++] = s; lab[s] = 1;
+      let head = start;
+      let min1 = 1e9, max1 = -1e9, min2 = 1e9, max2 = -1e9;
+      while (head < oc) {
+        const i = order[head++];
+        const x = i % sw, y = (i / sw) | 0;
+        const s1 = x + y, s2 = x - y;
+        if (s1 < min1) min1 = s1; if (s1 > max1) max1 = s1;
+        if (s2 < min2) min2 = s2; if (s2 > max2) max2 = s2;
+        if (x > 0 && m[i - 1] && !lab[i - 1]) { lab[i - 1] = 1; order[oc++] = i - 1; }
+        if (x < sw - 1 && m[i + 1] && !lab[i + 1]) { lab[i + 1] = 1; order[oc++] = i + 1; }
+        if (y > 0 && m[i - sw] && !lab[i - sw]) { lab[i - sw] = 1; order[oc++] = i - sw; }
+        if (y < sh - 1 && m[i + sw] && !lab[i + sw]) { lab[i + sw] = 1; order[oc++] = i + sw; }
+      }
+      const area = oc - start;
+      if (area > n * 0.004) comps.push({ start, end: oc, area, min1, max1, min2, max2 });
+    }
+    comps.sort((a, b) => b.area - a.area);
+    let best = null;
+    const tol = 3;
+    for (const c of comps.slice(0, 8)) {
+      const acc = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]]; // TL TR BR BL
+      for (let k = c.start; k < c.end; k++) {
+        const i = order[k], x = i % sw, y = (i / sw) | 0, s1 = x + y, s2 = x - y;
+        if (s1 <= c.min1 + tol) { acc[0][0] += x; acc[0][1] += y; acc[0][2]++; }
+        if (s2 >= c.max2 - tol) { acc[1][0] += x; acc[1][1] += y; acc[1][2]++; }
+        if (s1 >= c.max1 - tol) { acc[2][0] += x; acc[2][1] += y; acc[2][2]++; }
+        if (s2 <= c.min2 + tol) { acc[3][0] += x; acc[3][1] += y; acc[3][2]++; }
+      }
+      const q = acc.map((a) => [a[0] / a[2], a[1] / a[2]]);
+      // shoelace area
+      let ar = 0;
+      for (let i = 0; i < 4; i++) { const p = q[i], r = q[(i + 1) % 4]; ar += p[0] * r[1] - r[0] * p[1]; }
+      ar = Math.abs(ar) / 2;
+      if (ar < n * 0.06) continue;
+      const cx = (q[0][0] + q[1][0] + q[2][0] + q[3][0]) / 4, cy = (q[0][1] + q[1][1] + q[2][1] + q[3][1]) / 4;
+      let minEdge = 1, sum = 0;
+      for (let e = 0; e < 4; e++) {
+        const p = q[e], r = q[(e + 1) % 4];
+        const len = Math.hypot(r[0] - p[0], r[1] - p[1]);
+        if (len < 0.15 * Math.max(sw, sh)) { minEdge = 0; break; }
+        let hit = 0, tot = 0;
+        for (let t = 0.04; t <= 0.96; t += 0.01) {
+          const px = p[0] + (r[0] - p[0]) * t, py = p[1] + (r[1] - p[1]) * t;
+          let dx = cx - px, dy = cy - py; const dl = Math.hypot(dx, dy) || 1; dx /= dl; dy /= dl;
+          let ok = 0;
+          for (const d of [2, 4, 6, 8, 11]) {
+            const xx = Math.round(px + dx * d), yy = Math.round(py + dy * d);
+            if (xx >= 0 && yy >= 0 && xx < sw && yy < sh && raw[yy * sw + xx]) { ok = 1; break; }
+          }
+          hit += ok; tot++;
+        }
+        const f = hit / tot;
+        sum += f; if (f < minEdge) minEdge = f;
+      }
+      const score = minEdge * 0.7 + (sum / 4) * 0.3;
+      if (minEdge >= 0.55 && (!best || score > best.score)) best = { q, score, minEdge };
+    }
+    return best;
+  }
+
+  /* ---------------- perspective straightening ---------------- */
+  function solve(A, b) {
+    const n = b.length;
+    for (let i = 0; i < n; i++) {
+      let p = i;
+      for (let r = i + 1; r < n; r++) if (Math.abs(A[r][i]) > Math.abs(A[p][i])) p = r;
+      [A[i], A[p]] = [A[p], A[i]]; [b[i], b[p]] = [b[p], b[i]];
+      for (let r = i + 1; r < n; r++) {
+        const f = A[r][i] / A[i][i];
+        for (let c = i; c < n; c++) A[r][c] -= f * A[i][c];
+        b[r] -= f * b[i];
+      }
+    }
+    const x = new Array(n).fill(0);
+    for (let i = n - 1; i >= 0; i--) {
+      let s = b[i];
+      for (let c = i + 1; c < n; c++) s -= A[i][c] * x[c];
+      x[i] = s / A[i][i];
+    }
+    return x;
+  }
+  function homography(from, to) {
+    const A = [], b = [];
+    for (let i = 0; i < 4; i++) {
+      const [x, y] = from[i], [X, Y] = to[i];
+      A.push([x, y, 1, 0, 0, 0, -X * x, -X * y]); b.push(X);
+      A.push([0, 0, 0, x, y, 1, -Y * x, -Y * y]); b.push(Y);
+    }
+    return solve(A, b);
+  }
+  function warp(srcData, sw, sh, quad, ow, oh) {
+    const H = homography([[0, 0], [ow, 0], [ow, oh], [0, oh]], quad);
+    const out = new ImageData(ow, oh), od = out.data;
+    for (let y = 0; y < oh; y++) for (let x = 0; x < ow; x++) {
+      const den = H[6] * x + H[7] * y + 1;
+      let sx = (H[0] * x + H[1] * y + H[2]) / den - 0.5, sy = (H[3] * x + H[4] * y + H[5]) / den - 0.5;
+      if (sx < 0) sx = 0; else if (sx > sw - 1.001) sx = sw - 1.001;
+      if (sy < 0) sy = 0; else if (sy > sh - 1.001) sy = sh - 1.001;
+      const x0 = sx | 0, y0 = sy | 0, fx = sx - x0, fy = sy - y0;
+      const i00 = (y0 * sw + x0) * 4, i10 = i00 + 4, i01 = i00 + sw * 4, i11 = i01 + 4;
+      const o = (y * ow + x) * 4;
+      for (let c = 0; c < 3; c++) {
+        const t = srcData[i00 + c] * (1 - fx) + srcData[i10 + c] * fx;
+        const u = srcData[i01 + c] * (1 - fx) + srcData[i11 + c] * fx;
+        od[o + c] = t * (1 - fy) + u * fy;
+      }
+      od[o + 3] = 255;
+    }
+    return out;
+  }
+
+  /* ---------------- where does the frame stop and the art start ---------------- */
+  function median(a) { a.sort((x, y) => x - y); return a[a.length >> 1]; }
+  function findOpening(d, w, h) {
+    const m = Math.min(w, h);
+    const res = {};
+    let found = 0;
+    for (const side of ['top', 'bottom', 'left', 'right']) {
+      const horiz = side === 'top' || side === 'bottom';
+      const along = horiz ? w : h;
+      const a0 = Math.round(along * 0.2), a1 = Math.round(along * 0.8);
+      const at = (k, a) => {
+        let x, y;
+        if (side === 'top') { x = a; y = k; } else if (side === 'bottom') { x = a; y = h - 1 - k; }
+        else if (side === 'left') { x = k; y = a; } else { x = w - 1 - k; y = a; }
+        return (y * w + x) * 4;
+      };
+      const R = [], G = [], B = [];
+      for (let k = Math.round(m * 0.02); k <= Math.round(m * 0.035); k += 2) for (let a = a0; a < a1; a += 4) {
+        const i = at(k, a); R.push(d[i]); G.push(d[i + 1]); B.push(d[i + 2]);
+      }
+      const rr = median(R), gg = median(G), bb = median(B);
+      const maxK = Math.round(m * 0.25);
+      const frac = new Float32Array(maxK + 3);
+      for (let k = 0; k < maxK + 3; k++) {
+        let hit = 0, tot = 0;
+        for (let a = a0; a < a1; a += 4) {
+          const i = at(k, a);
+          const dr = d[i] - rr, dg = d[i + 1] - gg, db = d[i + 2] - bb;
+          if (dr * dr + dg * dg + db * db < 48 * 48) hit++;
+          tot++;
+        }
+        frac[k] = hit / tot;
+      }
+      let t = -1;
+      for (let k = Math.round(m * 0.02); k < maxK; k++) {
+        if ((frac[k] + frac[k + 1] + frac[k + 2]) / 3 < 0.5) { t = k; break; }
+      }
+      if (t > 0) found++;
+      res[side] = t;
+    }
+    const good = ['top', 'bottom', 'left', 'right'].map((s) => res[s]).filter((v) => v > 0);
+    const med = good.length ? median(good.slice()) : m * 0.065;
+    const clampT = (v) => (v > 0 ? Math.min(Math.max(v, med * 0.6), med * 1.5) : med);
+    return { t: clampT(res.top), b: clampT(res.bottom), l: clampT(res.left), r: clampT(res.right), found, raw: res, med };
+  }
+
+  /* ---------------- unframed art: biggest blob that differs from the background ---------------- */
+  function morph(m, w, h, erode) {
+    const o = new Uint8Array(w * h);
+    for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x;
+      const s = m[i] + m[i - 1] + m[i + 1] + m[i - w] + m[i + w] + m[i - w - 1] + m[i - w + 1] + m[i + w - 1] + m[i + w + 1];
+      o[i] = erode ? (s === 9 ? 1 : 0) : (s > 0 ? 1 : 0);
+    }
+    return o;
+  }
+  function detectArt(sw, sh, data) {
+    const n = sw * sh, bw = Math.max(3, Math.round(Math.min(sw, sh) * 0.04));
+    const R = [], G = [], B = [];
+    for (let y = 0; y < sh; y += 2) for (let x = 0; x < sw; x += 2) {
+      if (x < bw || y < bw || x >= sw - bw || y >= sh - bw) { const i = (y * sw + x) * 4; R.push(data[i]); G.push(data[i + 1]); B.push(data[i + 2]); }
+    }
+    const br = median(R), bg = median(G), bb = median(B);
+    let m = new Uint8Array(n);
+    for (let i = 0; i < n; i++) {
+      const dr = data[i * 4] - br, dg = data[i * 4 + 1] - bg, db = data[i * 4 + 2] - bb;
+      m[i] = dr * dr + dg * dg + db * db > 55 * 55 ? 1 : 0;
+    }
+    for (let k = 0; k < 3; k++) m = morph(m, sw, sh, false);
+    for (let k = 0; k < 3; k++) m = morph(m, sw, sh, true);
+    m = open3(m, sw, sh);
+    const lab = new Uint8Array(n), order = new Int32Array(n);
+    let oc = 0, best = null;
+    const cx = sw >> 1, cy = sh >> 1;
+    for (let s0 = 0; s0 < n; s0++) {
+      if (!m[s0] || lab[s0]) continue;
+      const start = oc; order[oc++] = s0; lab[s0] = 1;
+      let head = start, min1 = 1e9, max1 = -1e9, min2 = 1e9, max2 = -1e9, minx = 1e9, maxx = -1, miny = 1e9, maxy = -1;
+      while (head < oc) {
+        const i = order[head++], x = i % sw, y = (i / sw) | 0, s1 = x + y, s2 = x - y;
+        if (s1 < min1) min1 = s1; if (s1 > max1) max1 = s1; if (s2 < min2) min2 = s2; if (s2 > max2) max2 = s2;
+        if (x < minx) minx = x; if (x > maxx) maxx = x; if (y < miny) miny = y; if (y > maxy) maxy = y;
+        if (x > 0 && m[i - 1] && !lab[i - 1]) { lab[i - 1] = 1; order[oc++] = i - 1; }
+        if (x < sw - 1 && m[i + 1] && !lab[i + 1]) { lab[i + 1] = 1; order[oc++] = i + 1; }
+        if (y > 0 && m[i - sw] && !lab[i - sw]) { lab[i - sw] = 1; order[oc++] = i - sw; }
+        if (y < sh - 1 && m[i + sw] && !lab[i + sw]) { lab[i + sw] = 1; order[oc++] = i + sw; }
+      }
+      const area = oc - start;
+      const edges = (minx <= 1) + (maxx >= sw - 2) + (miny <= 1) + (maxy >= sh - 2);
+      if (area < n * 0.06 || area > n * 0.9 || edges >= 2) continue;
+      if (cx < minx || cx > maxx || cy < miny || cy > maxy) continue;
+      if (!best || area > best.area) best = { start, end: oc, area, min1, max1, min2, max2 };
+    }
+    if (!best) return null;
+    const tol = 3, acc = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]];
+    for (let k = best.start; k < best.end; k++) {
+      const i = order[k], x = i % sw, y = (i / sw) | 0, s1 = x + y, s2 = x - y;
+      if (s1 <= best.min1 + tol) { acc[0][0] += x; acc[0][1] += y; acc[0][2]++; }
+      if (s2 >= best.max2 - tol) { acc[1][0] += x; acc[1][1] += y; acc[1][2]++; }
+      if (s1 >= best.max1 - tol) { acc[2][0] += x; acc[2][1] += y; acc[2][2]++; }
+      if (s2 <= best.min2 + tol) { acc[3][0] += x; acc[3][1] += y; acc[3][2]++; }
+    }
+    const q = acc.map((a) => [a[0] / a[2], a[1] / a[2]]);
+    let ar = 0;
+    for (let i = 0; i < 4; i++) { const p = q[i], r = q[(i + 1) % 4]; ar += p[0] * r[1] - r[0] * p[1]; }
+    ar = Math.abs(ar) / 2;
+    if (ar < 1 || best.area / ar < 0.8 || best.area / ar > 1.15) return null;   // blob is not a rectangle
+    return q;
+  }
+
+  /* Unframed piece: find the rectangle whose four sides are lined with strong, straight edges, then tilt each side to fit. */
+  function detectEdgeRect(sw, sh, data) {
+    const n = sw * sh, g = new Float32Array(n);
+    for (let i = 0; i < n; i++) g[i] = data[i * 4] * 0.3 + data[i * 4 + 1] * 0.59 + data[i * 4 + 2] * 0.11;
+    const bl = new Float32Array(n);
+    for (let y = 1; y < sh - 1; y++) for (let x = 1; x < sw - 1; x++) { const i = y * sw + x; bl[i] = (g[i - sw - 1] + g[i - sw] + g[i - sw + 1] + g[i - 1] + g[i] + g[i + 1] + g[i + sw - 1] + g[i + sw] + g[i + sw + 1]) / 9; }
+    const T = 9;
+    const hs = new Uint8Array(n), vs = new Uint8Array(n);   // strong horizontal / vertical edges
+    const hg = new Float32Array(n), vg = new Float32Array(n);
+    for (let y = 1; y < sh - 2; y++) for (let x = 1; x < sw - 2; x++) {
+      const i = y * sw + x, dy = Math.abs(bl[i + sw] - bl[i]), dx = Math.abs(bl[i + 1] - bl[i]);
+      hg[i] = dy; vg[i] = dx; if (dy > T) hs[i] = 1; if (dx > T) vs[i] = 1;
+    }
+    // candidate rows / columns: peaks in the count of strong edge pixels
+    const rc = new Float32Array(sh), cc = new Float32Array(sw);
+    for (let y = 0; y < sh; y++) for (let x = 0; x < sw; x++) { const i = y * sw + x; rc[y] += hs[i]; cc[x] += vs[i]; }
+    const pick = (cnt, len, minc) => {
+      const out = [];
+      for (let k = 3; k < len - 3; k++) {
+        let mx = true; for (let d = -5; d <= 5; d++) { const j = k + d; if (j >= 0 && j < len && cnt[j] > cnt[k]) { mx = false; break; } }
+        if (mx && cnt[k] >= minc) out.push(k);
+      }
+      out.sort((a, b) => cnt[b] - cnt[a]);
+      return out.slice(0, 14);
+    };
+    const Ys = pick(rc, sh, sw * 0.12), Xs = pick(cc, sw, sh * 0.12);
+    if (Ys.length < 2 || Xs.length < 2) return null;
+    // prefix sums of "strong within +-1" along each candidate line
+    const rowPre = Ys.map((y) => { const p = new Int32Array(sw + 1); for (let x = 0; x < sw; x++) { const i = y * sw + x; p[x + 1] = p[x] + ((hs[i] | hs[i - sw] | hs[i + sw]) ? 1 : 0); } return p; });
+    const colPre = Xs.map((x) => { const p = new Int32Array(sh + 1); for (let y = 0; y < sh; y++) { const i = y * sw + x; p[y + 1] = p[y] + ((vs[i] | vs[i - 1] | vs[i + 1]) ? 1 : 0); } return p; });
+    const frac = (p, a, b) => (b > a ? (p[b] - p[a]) / (b - a) : 0);
+    const mn = Math.min(sw, sh);
+    let best = null;
+    for (let a = 0; a < Ys.length; a++) for (let b = 0; b < Ys.length; b++) {
+      const y1 = Ys[a], y2 = Ys[b]; if (y2 - y1 < mn * 0.15) continue;
+      for (let c = 0; c < Xs.length; c++) for (let d = 0; d < Xs.length; d++) {
+        const x1 = Xs[c], x2 = Xs[d]; if (x2 - x1 < mn * 0.15) continue;
+        const w = x2 - x1, h = y2 - y1, ar = w / h;
+        if (ar < 0.25 || ar > 4 || w * h < n * 0.05) continue;
+        const ix = Math.round(w * 0.06), iy = Math.round(h * 0.06);
+        const s = [frac(rowPre[a], x1 + ix, x2 - ix), frac(rowPre[b], x1 + ix, x2 - ix), frac(colPre[c], y1 + iy, y2 - iy), frac(colPre[d], y1 + iy, y2 - iy)];
+        const lo = Math.min(...s); if (lo < 0.3) continue;
+        const sc = (s[0] + s[1] + s[2] + s[3]) / 4 + 0.35 * lo + 0.25 * Math.sqrt(w * h / n);
+        if (!best || sc > best.sc) best = { sc, x1, x2, y1, y2, lo };
+      }
+    }
+    if (!best) return null;
+    // tilt each side to the edge actually there
+    const rad = Math.max(4, Math.round(mn * 0.018));
+    const fit = (x1, x2, y1, y2, horiz, pos) => {
+      const pts = [], a0 = horiz ? x1 : y1, a1 = horiz ? x2 : y2, len = a1 - a0;
+      for (let t = a0 + len * 0.08; t <= a1 - len * 0.08; t += 3) {
+        let bi = -1, bv = T;
+        for (let o = -rad; o <= rad; o++) {
+          const p = pos + o, i = horiz ? p * sw + Math.round(t) : Math.round(t) * sw + p;
+          if (i < 0 || i >= n) continue;
+          const v = horiz ? hg[i] : vg[i]; if (v > bv) { bv = v; bi = p; }
+        }
+        if (bi >= 0) pts.push([t, bi]);
+      }
+      if (pts.length < len / 3 * 0.3) return [0, pos];
+      let A = 0, B = pos;
+      for (let it = 0; it < 4; it++) {
+        let sx = 0, sy = 0, sxx = 0, sxy = 0, m = 0;
+        for (const [t, p] of pts) { if (it > 0 && Math.abs(p - (A * t + B)) > 2.5) continue; sx += t; sy += p; sxx += t * t; sxy += t * p; m++; }
+        const den = m * sxx - sx * sx; if (m < 4 || Math.abs(den) < 1e-6) break;
+        A = (m * sxy - sx * sy) / den; B = (sy - A * sx) / m;
+      }
+      if (Math.abs(A) > 0.12) return [0, pos];   // more than ~7 degrees: not a believable tilt, keep it square
+      return [A, B];
+    };
+    const T_ = fit(best.x1, best.x2, best.y1, best.y2, true, best.y1), Bm = fit(best.x1, best.x2, best.y1, best.y2, true, best.y2);
+    const Lf = fit(best.x1, best.x2, best.y1, best.y2, false, best.x1), Rf = fit(best.x1, best.x2, best.y1, best.y2, false, best.x2);
+    // y = A x + B (horizontals), x = A y + B (verticals)
+    const hit = (h, v) => { const ys = (h[0] * v[1] + h[1]) / (1 - h[0] * v[0]); return [v[0] * ys + v[1], ys]; };
+    const q = [hit(T_, Lf), hit(T_, Rf), hit(Bm, Rf), hit(Bm, Lf)];
+    const support = (qq) => {   // how much of each side of a quad sits on a strong edge
+      let tot = 0;
+      for (let k = 0; k < 4; k++) {
+        const a = qq[k], b = qq[(k + 1) % 4], L = Math.hypot(b[0] - a[0], b[1] - a[1]), horiz = k % 2 === 0;
+        let hit = 0, cnt = 0;
+        for (let t = 0.08; t <= 0.92; t += 0.02) {
+          const px = a[0] + (b[0] - a[0]) * t, py = a[1] + (b[1] - a[1]) * t; cnt++;
+          let ok = false;
+          for (let o = -3; o <= 3 && !ok; o++) {
+            const xx = Math.round(horiz ? px : px + o), yy = Math.round(horiz ? py + o : py);
+            if (xx > 0 && yy > 0 && xx < sw - 1 && yy < sh - 1 && (horiz ? hs : vs)[yy * sw + xx]) ok = true;
+          }
+          if (ok) hit++;
+        }
+        tot += hit / cnt;
+      }
+      return tot / 4;
+    };
+    return { q, score: best.sc, lo: best.lo, support };
+  }
+
+  /* Unframed piece, general case: find long straight edges (Hough), then the four-sided shape whose sides sit on real edges.
+     Handles tilt and perspective, so a board leaning on a shelf photographed from the side still comes out square. */
+  function detectLines(sw, sh, data) {
+    const n = sw * sh, g = new Float32Array(n);
+    for (let i = 0; i < n; i++) g[i] = data[i * 4] * 0.3 + data[i * 4 + 1] * 0.59 + data[i * 4 + 2] * 0.11;
+    const bl = new Float32Array(n);
+    for (let y = 1; y < sh - 1; y++) for (let x = 1; x < sw - 1; x++) { const i = y * sw + x; bl[i] = (g[i - sw - 1] + 2 * g[i - sw] + g[i - sw + 1] + 2 * g[i - 1] + 4 * g[i] + 2 * g[i + 1] + g[i + sw - 1] + 2 * g[i + sw] + g[i + sw + 1]) / 16; }
+    const mag = new Float32Array(n), eo = new Int16Array(n).fill(-1);
+    const hist = new Uint32Array(512);
+    for (let y = 1; y < sh - 1; y++) for (let x = 1; x < sw - 1; x++) {
+      const i = y * sw + x;
+      const gx = (bl[i - sw + 1] + 2 * bl[i + 1] + bl[i + sw + 1]) - (bl[i - sw - 1] + 2 * bl[i - 1] + bl[i + sw - 1]);
+      const gy = (bl[i + sw - 1] + 2 * bl[i + sw] + bl[i + sw + 1]) - (bl[i - sw - 1] + 2 * bl[i - sw] + bl[i - sw + 1]);
+      const m = Math.hypot(gx, gy); mag[i] = m; hist[Math.min(511, m | 0)]++;
+      if (m > 0) { let a = Math.atan2(gy, gx) * 180 / Math.PI; if (a < 0) a += 180; if (a >= 180) a -= 180; eo[i] = Math.round(a) % 180; }
+    }
+    let acc0 = 0, T = 30; const tot = (sw - 2) * (sh - 2);
+    for (let k = 0; k < 512; k++) { acc0 += hist[k]; if (acc0 > tot * 0.88) { T = Math.max(24, k); break; } }
+    for (let i = 0; i < n; i++) { const x = i % sw, y = (i / sw) | 0; if (mag[i] < T || x < 5 || y < 5 || x >= sw - 5 || y >= sh - 5) eo[i] = -1; }
+    const diag = Math.ceil(Math.hypot(sw, sh)), RW = diag * 2 + 1;
+    const acc = new Float32Array(180 * RW);
+    const cs = new Float32Array(180), sn = new Float32Array(180);
+    for (let t = 0; t < 180; t++) { cs[t] = Math.cos(t * Math.PI / 180); sn[t] = Math.sin(t * Math.PI / 180); }
+    for (let y = 1; y < sh - 1; y++) for (let x = 1; x < sw - 1; x++) {
+      const a = eo[y * sw + x]; if (a < 0) continue;
+      for (let d = -1; d <= 1; d++) {
+        const t = (a + d + 180) % 180, r = Math.round(x * cs[t] + y * sn[t]) + diag;
+        acc[t * RW + r] += 1;
+      }
+    }
+    const mn = Math.min(sw, sh), minV = mn * 0.14;
+    const peaks = [];
+    for (let t = 0; t < 180; t++) for (let r = 3; r < RW - 3; r++) {
+      const v = acc[t * RW + r] + acc[t * RW + r - 1] + acc[t * RW + r + 1];
+      if (v < minV) continue;
+      let ok = true;
+      for (let dt = -3; dt <= 3 && ok; dt++) for (let dr = -6; dr <= 6; dr++) {
+        if (!dt && !dr) continue;
+        const t2 = (t + dt + 180) % 180, r2 = r + dr; if (r2 < 0 || r2 >= RW) continue;
+        const v2 = acc[t2 * RW + r2] + (r2 > 0 ? acc[t2 * RW + r2 - 1] : 0) + (r2 < RW - 1 ? acc[t2 * RW + r2 + 1] : 0);
+        if (v2 > v || (v2 === v && (dt < 0 || (dt === 0 && dr < 0)))) { ok = false; break; }
+      }
+      if (ok) peaks.push({ t, rho: r - diag, v });
+    }
+    peaks.sort((a, b) => b.v - a.v);
+    const Hs = [], Vs = [];
+    for (const p of peaks) {
+      const dh = Math.abs(p.t - 90);
+      if (dh <= 32) { if (Hs.length < 16) Hs.push(p); }
+      else if (p.t <= 32 || p.t >= 148) { if (Vs.length < 16) Vs.push(p); }
+    }
+    if (Hs.length < 2 || Vs.length < 2) return null;
+    const cx = sw / 2, cy = sh / 2;
+    for (const p of Hs) p.pos = (p.rho - cx * cs[p.t]) / sn[p.t];   // y at the middle column
+    for (const p of Vs) p.pos = (p.rho - cy * sn[p.t]) / cs[p.t];   // x at the middle row
+    const inter = (a, b) => { const det = cs[a.t] * sn[b.t] - sn[a.t] * cs[b.t]; if (Math.abs(det) < 1e-4) return null; return [(a.rho * sn[b.t] - b.rho * sn[a.t]) / det, (cs[a.t] * b.rho - cs[b.t] * a.rho) / det]; };
+    const angd = (a, b) => { let d = Math.abs(a - b); return Math.min(d, 180 - d); };
+    const sideSupport = (p, q, t) => {
+      const L = Math.hypot(q[0] - p[0], q[1] - p[1]); if (L < 8) return 0;
+      const N = Math.max(12, Math.round(L / 3)); let hit = 0;
+      const nx = cs[t], ny = sn[t];
+      for (let k = 0; k < N; k++) {
+        const f = 0.04 + 0.92 * (k + 0.5) / N, px = p[0] + (q[0] - p[0]) * f, py = p[1] + (q[1] - p[1]) * f;
+        let ok = false;
+        for (let o = -3; o <= 3 && !ok; o++) {
+          const xx = Math.round(px + nx * o), yy = Math.round(py + ny * o);
+          if (xx < 1 || yy < 1 || xx >= sw - 1 || yy >= sh - 1) continue;
+          const a = eo[yy * sw + xx]; if (a >= 0 && angd(a, t) <= 22) ok = true;
+        }
+        if (ok) hit++;
+      }
+      return hit / N;
+    };
+    const mg = 0.06, X0 = -sw * mg, X1 = sw * (1 + mg), Y0 = -sh * mg, Y1 = sh * (1 + mg);
+    let best = null;
+    for (let a = 0; a < Hs.length; a++) for (let b = a + 1; b < Hs.length; b++) {
+      let T1 = Hs[a], B1 = Hs[b]; if (T1.pos > B1.pos) { const tmp = T1; T1 = B1; B1 = tmp; }
+      if (B1.pos - T1.pos < mn * 0.15 || angd(T1.t, B1.t) > 22) continue;
+      for (let c = 0; c < Vs.length; c++) for (let d = c + 1; d < Vs.length; d++) {
+        let L1 = Vs[c], R1 = Vs[d]; if (L1.pos > R1.pos) { const tmp = L1; L1 = R1; R1 = tmp; }
+        if (R1.pos - L1.pos < mn * 0.15 || angd(L1.t, R1.t) > 22) continue;
+        const tl = inter(T1, L1), tr = inter(T1, R1), br = inter(B1, R1), bl2 = inter(B1, L1);
+        if (!tl || !tr || !br || !bl2) continue;
+        const q = [tl, tr, br, bl2];
+        if (q.some((p) => p[0] < X0 || p[0] > X1 || p[1] < Y0 || p[1] > Y1)) continue;
+        let area = 0, convex = true, sgn = 0;
+        for (let i = 0; i < 4; i++) {
+          const p = q[i], r = q[(i + 1) % 4], u = q[(i + 2) % 4];
+          area += p[0] * r[1] - r[0] * p[1];
+          const cr = (r[0] - p[0]) * (u[1] - r[1]) - (r[1] - p[1]) * (u[0] - r[0]);
+          if (Math.abs(cr) < 1e-6) { convex = false; break; } const sg = cr > 0 ? 1 : -1; if (!sgn) sgn = sg; else if (sg !== sgn) { convex = false; break; }
+        }
+        area = Math.abs(area) / 2;
+        if (!convex || area < n * 0.05 || area > n * 1.1) continue;
+        const wq = Math.hypot(tr[0] - tl[0], tr[1] - tl[1]), hq = Math.hypot(bl2[0] - tl[0], bl2[1] - tl[1]), ar = wq / hq;
+        if (ar < 0.3 || ar > 3.4) continue;
+        const s = [sideSupport(tl, tr, T1.t), sideSupport(tr, br, R1.t), sideSupport(bl2, br, B1.t), sideSupport(tl, bl2, L1.t)];
+        const lo = Math.min(...s); if (lo < 0.4) continue;
+        const sc = (s[0] + s[1] + s[2] + s[3]) / 4 + 0.5 * lo + 0.35 * Math.sqrt(Math.min(1, area / n));
+        if (!best || sc > best.sc) best = { sc, q, lo, s };
+      }
+    }
+    return best;
+  }
+  const applyH = (H, x, y) => { const d = H[6] * x + H[7] * y + 1; return [(H[0] * x + H[1] * y + H[2]) / d, (H[3] * x + H[4] * y + H[5]) / d]; };
+
+  /* ---------------- one photo: bitmap in, straightened frame + opening out ---------------- */
+  async function loadBitmap(file) {
+    try { return await createImageBitmap(file, { imageOrientation: 'from-image' }); }
+    catch (e) {
+      const url = URL.createObjectURL(file);
+      try {
+        const img = new Image(); img.src = url; await img.decode();
+        return img;
+      } finally { URL.revokeObjectURL(url); }
+    }
+  }
+
+  /* Timber-coloured strips along the outside of a straightened crop. Returns per-side widths if at least two sides have one. */
+  function timberBands(d, w, h) {
+    const maxD = Math.round(Math.min(w, h) * 0.14), minD = Math.max(3, Math.round(Math.min(w, h) * 0.012));
+    const res = { t: 0, b: 0, l: 0, r: 0 };
+    const frac = (side, k) => {
+      let hit = 0, tot = 0;
+      const horiz = side === 't' || side === 'b', len = horiz ? w : h;
+      for (let p = Math.round(len * 0.12); p < len * 0.88; p += 2) {
+        let x, y;
+        if (side === 't') { x = p; y = k; } else if (side === 'b') { x = p; y = h - 1 - k; } else if (side === 'l') { x = k; y = p; } else { x = w - 1 - k; y = p; }
+        const i = (y * w + x) * 4; tot++;
+        if (timberPx(d[i], d[i + 1], d[i + 2])) hit++;
+      }
+      return hit / tot;
+    };
+    let sides = 0;
+    for (const side of ['t', 'b', 'l', 'r']) {
+      let last = -1, gap = 0;
+      for (let k = 0; k < maxD; k++) {
+        if (frac(side, k) >= 0.4) { last = k; gap = 0; } else if (++gap > 8) break;
+      }
+      if (last + 1 >= minD) { res[side] = last + 1; sides++; }
+    }
+    return sides >= 2 ? res : null;
+  }
+  /* The unframed finder often lands on the inner edge of a thin frame. If timber lines the outside of all four sides, return the outer quad. */
+  function timberLoose(r, g, b) {   // also catches timber that sits in shadow
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    if (mx < 60 || mx !== r) return false;
+    const dd = mx - mn;
+    if (dd < 22) return false;
+    const sat = dd / mx;
+    if (sat < 0.15 || sat > 0.75) return false;
+    const hue = ((g - b) / dd) * 60;
+    return hue >= 8 && hue <= 55;
+  }
+  function frameAround(q, d, w, h, allowZero) {
+    const bands = [], norm = [];
+    const cx = (q[0][0] + q[1][0] + q[2][0] + q[3][0]) / 4, cy = (q[0][1] + q[1][1] + q[2][1] + q[3][1]) / 4;
+    for (let e = 0; e < 4; e++) {
+      const p = q[e], r = q[(e + 1) % 4], len = Math.hypot(r[0] - p[0], r[1] - p[1]);
+      if (len < 20) return null;
+      let nx = -(r[1] - p[1]) / len, ny = (r[0] - p[0]) / len;
+      if (nx * ((p[0] + r[0]) / 2 - cx) + ny * ((p[1] + r[1]) / 2 - cy) < 0) { nx = -nx; ny = -ny; }
+      const maxK = Math.round(len * 0.12), minB = Math.max(3, len * 0.012);
+      const scan = (dir) => {
+      let last = -1, gap = 0, started = false;
+      for (let k = 1; k <= maxK; k++) {
+        let hit = 0, tot = 0;
+        for (let t = 0.15; t <= 0.85; t += 0.02) {
+          const x = Math.round(p[0] + (r[0] - p[0]) * t + nx * k * dir), y = Math.round(p[1] + (r[1] - p[1]) * t + ny * k * dir);
+          if (x < 0 || y < 0 || x >= w || y >= h) continue;
+          const i = (y * w + x) * 4; tot++;
+          if (timberLoose(d[i], d[i + 1], d[i + 2])) hit++;
+        }
+        if (tot && hit / tot >= 0.4) { last = k; gap = 0; started = true; } else if (++gap > (started ? 4 : 7)) break;
+      }
+      return last;
+      };
+      const last = scan(1);
+      if (last < minB) {
+        // nothing outside: fine if this side already sits on the outer edge, i.e. timber just inside it
+        if (!allowZero && scan(-1) < minB) return null;
+        bands.push(0); norm.push([nx, ny]); continue;
+      }
+      bands.push(last + 2); norm.push([nx, ny]);
+    }
+    const nz = bands.filter((v) => v > 0).sort((a, b) => a - b);
+    if (!nz.length) return null;
+    if (!allowZero && nz[nz.length - 1] > 2.6 * nz[0]) return null;
+    if (allowZero) { const med = nz[nz.length >> 1]; for (let e = 0; e < 4; e++) bands[e] = Math.min(bands[e], Math.round(med * 1.8)); }
+    // push each side out by its band, then intersect neighbouring lines for the new corners
+    const L = [];
+    for (let e = 0; e < 4; e++) {
+      const p = q[e], r = q[(e + 1) % 4], [nx, ny] = norm[e];
+      L.push([[p[0] + nx * bands[e], p[1] + ny * bands[e]], [r[0] + nx * bands[e], r[1] + ny * bands[e]]]);
+    }
+    const isect = (a, b) => {
+      const [p1, p2] = a, [p3, p4] = b;
+      const den = (p1[0] - p2[0]) * (p3[1] - p4[1]) - (p1[1] - p2[1]) * (p3[0] - p4[0]);
+      if (Math.abs(den) < 1e-6) return null;
+      const t = ((p1[0] - p3[0]) * (p3[1] - p4[1]) - (p1[1] - p3[1]) * (p3[0] - p4[0])) / den;
+      return [p1[0] + t * (p2[0] - p1[0]), p1[1] + t * (p2[1] - p1[1])];
+    };
+    const out = [isect(L[3], L[0]), isect(L[0], L[1]), isect(L[1], L[2]), isect(L[2], L[3])];
+    if (out.some((p) => !p)) return null;
+    return out;
+  }
+  async function processFile(file) {
+    const bmp = await loadBitmap(file);
+    const bw = bmp.width, bh = bmp.height;
+    const k = Math.min(1, MAX_SRC / Math.max(bw, bh));
+    const SW = Math.round(bw * k), SH = Math.round(bh * k);
+    const big = document.createElement('canvas'); big.width = SW; big.height = SH;
+    const bctx = big.getContext('2d', { willReadFrequently: true });
+    bctx.drawImage(bmp, 0, 0, SW, SH);
+    if (bmp.close) bmp.close();
+
+    const ds = Math.min(1, DET / Math.max(SW, SH));
+    const dw = Math.round(SW * ds), dh = Math.round(SH * ds);
+    const small = document.createElement('canvas'); small.width = dw; small.height = dh;
+    const sctx = small.getContext('2d', { willReadFrequently: true });
+    sctx.drawImage(big, 0, 0, dw, dh);
+    const sdata = sctx.getImageData(0, 0, dw, dh).data;
+    let det = detectQuad(dw, dh, sdata);
+    if (det) {   // a real frame is a ring: if the middle is just as timber-coloured as the border, it is a bench or table, not a frame
+      const q = det.q, cxm = (q[0][0] + q[1][0] + q[2][0] + q[3][0]) / 4, cym = (q[0][1] + q[1][1] + q[2][1] + q[3][1]) / 4;
+      const qw = (Math.hypot(q[1][0] - q[0][0], q[1][1] - q[0][1]) + Math.hypot(q[2][0] - q[3][0], q[2][1] - q[3][1])) / 2, qh = (Math.hypot(q[3][0] - q[0][0], q[3][1] - q[0][1]) + Math.hypot(q[2][0] - q[1][0], q[2][1] - q[1][1])) / 2;
+      let tp = 0, tt = 0;
+      for (let yy = Math.round(cym - qh * 0.22); yy <= cym + qh * 0.22; yy += 2) for (let xx = Math.round(cxm - qw * 0.22); xx <= cxm + qw * 0.22; xx += 2) {
+        if (xx < 0 || yy < 0 || xx >= dw || yy >= dh) continue; const i = (yy * dw + xx) * 4; tt++; if (timberPx(sdata[i], sdata[i + 1], sdata[i + 2])) tp++;
+      }
+      if (tt && tp / tt > 0.7) det = null;
+    }
+    let lnC; const getLn = () => (lnC === undefined ? (lnC = detectLines(dw, dh, sdata)) : lnC);
+    const ringOk = det && det.minEdge >= 0.85;   // a clean ring is trusted as is
+    if (!ringOk) {   // second opinion: the straight-edge finder + timber lining the outside of all four sides. Trust it when it agrees roughly with the ring finder.
+      const ln0 = getLn(), fo0 = ln0 ? frameAround(ln0.q, sdata, dw, dh) : null;
+      if (fo0) {
+        const area = (q) => { let a = 0; for (let i = 0; i < 4; i++) { const p = q[i], r = q[(i + 1) % 4]; a += p[0] * r[1] - r[0] * p[1]; } return Math.abs(a) / 2; };
+        const ratio = det ? area(fo0) / area(det.q) : 1;
+        if (ratio >= 0.8 && ratio <= 1.8) det = { q: fo0, score: det ? det.score : 0.5 };
+      }
+    }
+    if (det && !ringOk) { const fo2 = frameAround(det.q, sdata, dw, dh, true); if (fo2) det = { q: fo2, score: det.score, minEdge: det.minEdge }; }
+
+    let quad, warn = false;
+    let hasFrame = !!det;
+    if (det) {
+      quad = det.q.map(([x, y]) => [x / ds, y / ds]);
+    } else {
+      warn = true;
+      const ln = getLn();
+      const flat = ln ? null : detectArt(dw, dh, sdata);
+      const er = ln ? null : detectEdgeRect(dw, dh, sdata);
+      let plain = ln ? ln.q : flat, useEdge = !!ln;
+      if (!ln && er && (!flat ? er.support(er.q) > 0.6 : (er.support(er.q) >= 0.85 && er.support(er.q) > er.support(flat) + 0.25))) { plain = er.q; useEdge = true; }
+      const fo = plain ? frameAround(plain, sdata, dw, dh) : null;
+      if (fo) { det = { q: fo, score: 0.5 }; plain = fo; warn = false; useEdge = false; hasFrame = true; }
+      if (useEdge) { const mx = plain.reduce((a, p) => a + p[0], 0) / 4, my = plain.reduce((a, p) => a + p[1], 0) / 4; plain = plain.map((p) => [mx + (p[0] - mx) * 0.988, my + (p[1] - my) * 0.988]); }
+      if (plain) quad = plain.map(([x, y]) => [x / ds, y / ds]);
+    }
+    if (!quad) {
+      const side = Math.min(SW, SH) * 0.72, cx = SW / 2, cy = SH / 2;
+      quad = [[cx - side / 2, cy - side / 2], [cx + side / 2, cy - side / 2], [cx + side / 2, cy + side / 2], [cx - side / 2, cy + side / 2]];
+    }
+    const L = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+    let ow = (L(quad[0], quad[1]) + L(quad[3], quad[2])) / 2, oh = (L(quad[0], quad[3]) + L(quad[1], quad[2])) / 2;
+    const sc = Math.min(1, MAX_RECT / Math.max(ow, oh));
+    ow = Math.round(ow * sc); oh = Math.round(oh * sc);
+    const srcData = bctx.getImageData(0, 0, SW, SH).data;
+    const img = warp(srcData, SW, SH, quad, ow, oh);
+    const frame = document.createElement('canvas'); frame.width = ow; frame.height = oh;
+    frame.getContext('2d').putImageData(img, 0, 0);
+
+    let op;
+    if (det) {
+      op = findOpening(img.data, ow, oh);
+      if (op.found < 3) warn = true;
+    } else {
+      op = { t: 0, b: 0, l: 0, r: 0 };
+      const tb = timberBands(img.data, ow, oh);   // framed piece the ring finder missed (e.g. frame only obvious on two sides)
+      if (tb) { op = tb; hasFrame = true; warn = false; }
+    }
+    big.width = big.height = small.width = small.height = 1; // free memory
+    return { name: file.name, file, frame, op, warn, fw: ow, fh: oh, hasFrame, SW, SH,
+      H: homography([[0, 0], [ow, 0], [ow, oh], [0, oh]], quad), score: det ? det.score : 0 };
+  }
+
+  /* ---------------- items, crops, wall ---------------- */
+  const state = { items: [], view: 'wall', roomIdx: 0, frame: 'original', trim: 1.2, wall: 0, sample: true };
+
+  function artRect(it) {
+    if (it.hasFrame === false) return { x: 0, y: 0, w: it.fw, h: it.fh };
+    const m = Math.min(it.fw, it.fh);
+    const tr = Math.round((m * state.trim) / 100);
+    let x = Math.round(it.op.l) + tr, y = Math.round(it.op.t) + tr;
+    let w = it.fw - Math.round(it.op.l) - Math.round(it.op.r) - 2 * tr;
+    let h = it.fh - Math.round(it.op.t) - Math.round(it.op.b) - 2 * tr;
+    if (w < it.fw * 0.4 || h < it.fh * 0.4) { x = 0; y = 0; w = it.fw; h = it.fh; }
+    return { x, y, w, h };
+  }
+  function makeArt(it) {
+    if (it.manual) return it.manual;
+    const { x, y, w, h } = artRect(it);
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    c.getContext('2d').drawImage(it.frame, x, y, w, h, 0, 0, w, h);
+    return c;
+  }
+  // zoom and pan inside the frame: show a smaller window of the picture at the same shape
+  function zoomed(it) {
+    const b = it.base, z = it.zoom || 1;
+    if (z <= 1.001) return b;
+    const w = b.width / z, h = b.height / z;
+    const x = Math.min(Math.max(0, (it.zx == null ? 0.5 : it.zx) * b.width - w / 2), b.width - w);
+    const y = Math.min(Math.max(0, (it.zy == null ? 0.5 : it.zy) * b.height - h / 2), b.height - h);
+    const c = document.createElement('canvas'); c.width = Math.round(w); c.height = Math.round(h);
+    const cx = c.getContext('2d'); cx.imageSmoothingQuality = 'high';
+    cx.drawImage(b, x, y, w, h, 0, 0, c.width, c.height);
+    return c;
+  }
+  function artQuad(it) {
+    if (it.manualQuad) return it.manualQuad;
+    const r = artRect(it);
+    return [[r.x, r.y], [r.x + r.w, r.y], [r.x + r.w, r.y + r.h], [r.x, r.y + r.h]].map(([x, y]) => applyH(it.H, x, y));
+  }
+  // footprint on the wall in cm, frame included
+  function footprint(it) {
+    const sh = shown(it), a = it.art;
+    return { w: sh.width * it.wcm / a.width, h: sh.height * it.hcm / a.height };
+  }
+  const pieceOf = (it) => { const f = footprint(it); return { c: shown(it), w: f.w, h: f.h }; };
+  const FRAMES = [
+    { id: 'none', name: 'None', base: null },
+    { id: 'original', name: 'Original timber, as photographed', base: null, css: 'linear-gradient(135deg,#E4C79B,#C9A56F)' },
+    { id: 'black', name: 'Black', base: '#16151A', hi: '#3A3942', lo: '#08080B', css: '#16151A' },
+    { id: 'white', name: 'White', base: '#F4F2EE', hi: '#FFFFFF', lo: '#CFCBC3', css: '#F4F2EE' },
+    { id: 'oak', name: 'Natural oak', base: '#CFA971', hi: '#E6C896', lo: '#A5804C', css: '#CFA971' },
+    { id: 'walnut', name: 'Dark walnut', base: '#5A3A28', hi: '#7B5440', lo: '#35211A', css: '#5A3A28' },
+    { id: 'gold', name: 'Gold', base: '#C8A24A', hi: '#EBCF82', lo: '#8F6F26', css: '#C8A24A' },
+  ];
+  function drawFrame(art, f) {
+    const m = Math.min(art.width, art.height), b = Math.round(m * 0.05);
+    const W = art.width + 2 * b, H = art.height + 2 * b;
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const x = c.getContext('2d');
+    x.fillStyle = f.base; x.fillRect(0, 0, W, H);
+    const poly = (pts, col) => { x.fillStyle = col; x.beginPath(); x.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) x.lineTo(pts[i][0], pts[i][1]); x.closePath(); x.fill(); };
+    poly([[0, 0], [W, 0], [W - b, b], [b, b]], f.hi);          // top catches light
+    poly([[0, 0], [b, b], [b, H - b], [0, H]], f.hi);          // left
+    poly([[W, 0], [W, H], [W - b, H - b], [W - b, b]], f.lo);  // right in shade
+    poly([[0, H], [b, H - b], [W - b, H - b], [W, H]], f.lo);  // bottom
+    x.strokeStyle = 'rgba(0,0,0,0.35)'; x.lineWidth = Math.max(1, b * 0.06);
+    x.beginPath(); x.moveTo(0, 0); x.lineTo(b, b); x.moveTo(W, 0); x.lineTo(W - b, b); x.moveTo(W, H); x.lineTo(W - b, H - b); x.moveTo(0, H); x.lineTo(b, H - b); x.stroke();
+    x.drawImage(art, b, b);
+    x.fillStyle = 'rgba(0,0,0,0.28)'; x.fillRect(b, b, art.width, Math.max(2, b * 0.07)); // inner shadow under the top edge
+    return c;
+  }
+  // the real frame from the photo, with the (possibly zoomed or re-cropped) picture dropped into its opening
+  function withOwnFrame(it) {
+    if (it.hasFrame === false || it.manual || !it.frame) return it.art;
+    const r = artRect(it);
+    const c = document.createElement('canvas'); c.width = it.frame.width; c.height = it.frame.height;
+    const x = c.getContext('2d'); x.drawImage(it.frame, 0, 0);
+    x.imageSmoothingQuality = 'high'; x.drawImage(it.art, r.x, r.y, r.w, r.h);
+    return c;
+  }
+  function refreshArt() {
+    for (const it of state.items) {
+      it.base = makeArt(it);
+      it.art = zoomed(it);
+      if (!it.sizeSet) {
+        const a = it.art, L = 30;
+        if (a.width >= a.height) { it.wcm = L; it.hcm = Math.max(1, Math.round(L * a.height / a.width)); }
+        else { it.hcm = L; it.wcm = Math.max(1, Math.round(L * a.width / a.height)); }
+      }
+      const f = FRAMES.find((q) => q.id === state.frame);
+      it.shown = state.frame === 'none' ? it.art : state.frame === 'original' ? withOwnFrame(it) : drawFrame(it.art, f);
+    }
+  }
+  function shown(it) { return it.shown || it.art; }
+
+  const PALETTES = [
+    { name: 'Gallery white', wall: '#E8E6E1', skirt: '#F6F5F2', dark: false },
+    { name: 'Warm grey', wall: '#C2BDB5', skirt: '#E7E4DE', dark: false },
+    { name: 'Sage', wall: '#A7B49F', skirt: '#EAEDE6', dark: false },
+    { name: 'Clay', wall: '#D2A48C', skirt: '#EFDED4', dark: false },
+    { name: 'Ink', wall: '#2B2D35', skirt: '#40424C', dark: true },
+  ];
+
+  let noisePat = null;
+  function noise(ctx) {
+    if (!noisePat) {
+      const n = document.createElement('canvas'); n.width = n.height = 220;
+      const nc = n.getContext('2d'), id = nc.createImageData(220, 220);
+      for (let i = 0; i < id.data.length; i += 4) { const v = Math.random() * 255; id.data[i] = id.data[i + 1] = id.data[i + 2] = v; id.data[i + 3] = 9; }
+      nc.putImageData(id, 0, 0);
+      noisePat = ctx.createPattern(n, 'repeat');
+    }
+    return noisePat;
+  }
+
+  function planWall(pcs, aw, ah, gap) {
+    let best = null;
+    const total = pcs.reduce((a, p) => a + p.w, 0);
+    for (let r = 1; r <= pcs.length; r++) {
+      const rows = Array.from({ length: r }, () => []);
+      let cum = 0;
+      pcs.forEach((p, i) => { rows[Math.min(r - 1, Math.floor(((cum + p.w / 2) / total) * r))].push(i); cum += p.w; });
+      const rr = rows.filter((x) => x.length);
+      const rowW = rr.map((row) => row.reduce((a, i) => a + pcs[i].w, 0) + (row.length - 1) * gap);
+      const rowH = rr.map((row) => Math.max(...row.map((i) => pcs[i].h)));
+      const totH = rowH.reduce((a, b) => a + b, 0) + (rr.length - 1) * gap;
+      const sc = Math.min(aw / Math.max(...rowW), ah / totH);
+      if (!best || sc > best.sc * 1.001) best = { sc, rows: rr, rowW, rowH, totH };
+    }
+    return best;
+  }
+
+  function drawWall(cv, W, H, pal, pcs) {
+    const ctx = cv.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = pal.wall; ctx.fillRect(0, 0, W, H);
+    const wallH = Math.round(H * 0.87), sk = Math.round(H * 0.04);
+    let g = ctx.createLinearGradient(0, 0, W, 0);
+    g.addColorStop(0, 'rgba(255,255,255,0.12)'); g.addColorStop(0.55, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(0,0,0,0.12)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, wallH);
+    g = ctx.createRadialGradient(W * 0.5, H * 0.38, H * 0.15, W * 0.5, H * 0.45, W * 0.78);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.16)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, wallH);
+    ctx.fillStyle = noise(ctx); ctx.fillRect(0, 0, W, wallH);
+    // skirting
+    ctx.fillStyle = pal.skirt; ctx.fillRect(0, wallH - sk, W, sk);
+    ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.fillRect(0, wallH - sk, W, 2);
+    // floor
+    g = ctx.createLinearGradient(0, wallH, 0, H);
+    g.addColorStop(0, '#8E6B47'); g.addColorStop(1, '#6E5136');
+    ctx.fillStyle = g; ctx.fillRect(0, wallH, W, H - wallH);
+    ctx.fillStyle = 'rgba(0,0,0,0.16)';
+    for (let x = 0; x < W; x += Math.round(W / 9)) ctx.fillRect(x, wallH, 2, H - wallH);
+    g = ctx.createLinearGradient(0, wallH, 0, wallH + H * 0.03);
+    g.addColorStop(0, 'rgba(0,0,0,0.35)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, wallH, W, H * 0.03);
+
+    if (!pcs.length) return;
+    const GAP = 8; // cm between pieces
+    const aw = W * 0.86, ah = (wallH - sk) * 0.86;
+    const plan = planWall(pcs, aw, ah, GAP);
+    const px = Math.min(plan.sc, W / 170);   // pixels per cm; the wall is about 1.7m wide on screen
+    const gp = GAP * px;
+    let y = Math.max((wallH - sk) * 0.47 - (plan.totH * px) / 2, H * 0.05);
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+    plan.rows.forEach((row, ri) => {
+      let x = (W - plan.rowW[ri] * px) / 2;
+      const rowH = plan.rowH[ri] * px;
+      for (const i of row) {
+        const w = pcs[i].w * px, h = pcs[i].h * px, yy = y + (rowH - h) / 2;
+        ctx.save();
+        ctx.shadowColor = pal.dark ? 'rgba(0,0,0,0.7)' : 'rgba(30,20,10,0.42)';
+        ctx.shadowBlur = W * 0.02; ctx.shadowOffsetY = W * 0.009; ctx.shadowOffsetX = W * 0.003;
+        ctx.fillStyle = '#000'; ctx.fillRect(x, yy, w, h);
+        ctx.restore();
+        ctx.drawImage(pcs[i].c, x, yy, w, h);
+        ctx.strokeStyle = 'rgba(255,255,255,0.14)'; ctx.lineWidth = 2; ctx.strokeRect(x + 1, yy + 1, w - 2, h - 2);
+        x += w + gp;
+      }
+      y += rowH + gp;
+    });
+  }
+
+  /* ---------------- room scene ---------------- */
+  const ROOM_DESK = "rooms/desk.jpg";
+  // The art hangs where the original painting was. 350px of that painting is 30cm, so about 11.67px per cm.
+  const ROOM = { w: 1254, h: 1254, cx: 626, cy: 361, pxcm: 350 / 30, patch: [384, 108, 902, 606] };
+  const rooms = [{ id: 'desk', name: 'Study desk', builtin: true, w: ROOM.w, h: ROOM.h, cx: ROOM.cx, cy: ROOM.cy, pxcm: ROOM.pxcm, base: null, maxCm: 48 }];
+  state.roomId = 'livingL';
+
+  /* ---------------- built-in room photos ---------------- */
+  const ROOM_IMGS = [
+    'rooms/r0.jpg',
+    'rooms/r1.jpg',
+    'rooms/r2.jpg',
+    'rooms/r3.jpg',
+    'rooms/r4.jpg',
+    'rooms/r5.jpg'
+  ];
+  [
+    { id: 'livingL', name: 'Light living room', img: 5, cx: 640, cy: 330, by: 580, pxcm: 4.8, maxCm: 100 },
+    { id: 'bedL', name: 'Light bedroom', img: 3, cx: 645, cy: 395, by: 565, pxcm: 4.4, maxCm: 100 },
+    { id: 'deskL', name: 'Light desk', img: 4, cx: 640, cy: 360, by: 470, pxcm: 5.8, maxCm: 80 },
+    { id: 'livingD', name: 'Dark living room', img: 2, cx: 640, cy: 330, by: 575, pxcm: 4.8, maxCm: 100 },
+    { id: 'bedD', name: 'Dark bedroom', img: 0, cx: 655, cy: 380, by: 500, pxcm: 4.4, maxCm: 100 },
+    { id: 'deskD', name: 'Dark desk', img: 1, cx: 660, cy: 360, by: 530, pxcm: 5.8, maxCm: 80 },
+  ].forEach((d) => {
+    const r = { id: d.id, name: d.name, builtin: true, w: 1254, h: 1254, cx: d.cx, cy: d.cy, pxcm: d.pxcm, by: d.by, base: null, maxCm: d.maxCm, over: ' Over about ' + d.maxCm + ' cm it will crowd the furniture.' };
+    rooms.push(r);
+    const im = new Image();
+    im.onload = () => { const c = document.createElement('canvas'); c.width = 1254; c.height = 1254; c.getContext('2d').drawImage(im, 0, 0, 1254, 1254); r.base = c; if (state.view === 'room') render(); };
+    im.src = ROOM_IMGS[d.img];
+  });
+  rooms.push(rooms.shift());   // your original desk goes last
+  const currentRoom = () => rooms.find((r) => r.id === state.roomId) || rooms[0];
+  (function loadRoom() {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas'); c.width = ROOM.w; c.height = ROOM.h;
+      const x = c.getContext('2d', { willReadFrequently: true });
+      x.drawImage(img, 0, 0, ROOM.w, ROOM.h);
+      const [x0, y0, x1, y1] = ROOM.patch;
+      const id = x.getImageData(0, 0, ROOM.w, ROOM.h), d = id.data, W = ROOM.w;
+      const R = rng(7), FE = 10;
+      for (let y = y0; y <= y1; y++) {
+        const sy = Math.min(y, 570);   // below here the plant leaf is close, so reuse the row above
+        const L = [0, 0, 0], Rr = [0, 0, 0];
+        for (let k = 0; k < 8; k++) for (let ch = 0; ch < 3; ch++) {
+          L[ch] += d[(sy * W + x0 - 14 - k) * 4 + ch]; Rr[ch] += d[(y * W + x1 + 14 + k) * 4 + ch];
+        }
+        for (let xx = x0; xx <= x1; xx++) {
+          const t = (xx - x0) / (x1 - x0), o = (y * W + xx) * 4, n = (R() - 0.5) * 6;
+          const a = Math.min(1, Math.min(xx - x0, x1 - xx, y - y0, y1 - y) / FE);
+          for (let ch = 0; ch < 3; ch++) {
+            const v = (L[ch] * (1 - t) + Rr[ch] * t) / 8 + n;
+            d[o + ch] = d[o + ch] * (1 - a) + v * a;
+          }
+        }
+      }
+      x.putImageData(id, 0, 0);
+      rooms.find((r) => r.id === 'desk').base = c;
+      if (state.view === 'room') render();
+    };
+    img.src = ROOM_DESK;
+  })();
+
+  function drawRoom(cv, it, ui) {
+    const R = currentRoom();
+    cv.width = R.w; cv.height = R.h;
+    const ctx = cv.getContext('2d');
+    if (!R.base || !it) { ctx.fillStyle = '#2C2E2C'; ctx.fillRect(0, 0, R.w, R.h); return; }
+    ctx.drawImage(R.base, 0, 0, R.w, R.h);
+    const sh = shown(it), f = footprint(it), k = R.pxcm / ROOM.pxcm;
+    const w = f.w * R.pxcm, h = f.h * R.pxcm, mv = it.rp && it.rp[R.id];
+    let x = R.cx - w / 2, y = R.by ? R.by - h : R.cy - h / 2;
+    if (mv) { x = mv.x * R.w - w / 2; y = mv.y * R.h - h / 2; }
+    it.box = { x, y, w, h, R };
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 16 * k; ctx.shadowOffsetX = 3 * k; ctx.shadowOffsetY = 7 * k;
+    ctx.fillStyle = '#000'; ctx.fillRect(x, y, w, h);
+    ctx.restore();
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(sh, x, y, w, h);
+    // warm room light falling across the piece, brighter on the lamp side
+    const g = ctx.createLinearGradient(x, y, x + w, y + h);
+    g.addColorStop(0, 'rgba(255,214,160,0.05)'); g.addColorStop(1, 'rgba(255,190,120,0.14)');
+    ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+    if (state.frame === 'none') { ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1.5; ctx.strokeRect(x + 0.75, y + 0.75, w - 1.5, h - 1.5); }
+    if (ui) {   // on-screen only: a handle on the bottom-right corner for resizing
+      const hr = Math.max(9, R.w * 0.013);
+      ctx.save(); ctx.beginPath(); ctx.arc(x + w, y + h, hr, 0, 7); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = Math.max(2, hr * 0.28); ctx.strokeStyle = '#FF5B1F'; ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x + w - hr * 0.42, y + h + hr * 0.42); ctx.lineTo(x + w + hr * 0.42, y + h - hr * 0.42); ctx.lineWidth = Math.max(1.5, hr * 0.18); ctx.stroke(); ctx.restore();
+      it.handle = { x: x + w, y: y + h, r: hr };
+    }
+  }
+
+  let raf = 0;
+  function render() {
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(() => {
+      const cv = $('wall');
+      const room = state.view === 'room';
+      $('stage').classList.toggle('room', room);
+      cv.style.aspectRatio = room ? currentRoom().w + ' / ' + currentRoom().h : '3 / 2';
+      if (room) {
+        const it = state.items[state.roomIdx] || state.items[0];
+        drawRoom(cv, it, true);
+        const f = it ? footprint(it) : { w: 0, h: 0 }, big = !(it && it.rp && it.rp[currentRoom().id]) && !!currentRoom().maxCm && Math.max(f.w, f.h) > currentRoom().maxCm;
+        const note = $('roomNote'); note.hidden = false; $('roomMoveRow').hidden = !(it && it.rp && it.rp[currentRoom().id]);
+        note.textContent = it ? 'Drag the art to move it, drag the orange dot to resize. ' + it.wcm + ' \u00D7 ' + it.hcm + ' cm' + (it.sample ? '' : '. Change the size under the photo.') + (big ? (currentRoom().over || ' Over about 45 cm it will cover the plant and desk in this room.') : '') : '';
+      } else {
+        $('roomNote').hidden = true; $('roomMoveRow').hidden = true;
+        cv.width = 2400; cv.height = 1600;
+        drawWall(cv, 2400, 1600, PALETTES[state.wall], state.items.map(pieceOf));
+      }
+    });
+  }
+
+
+  /* in a room: drag the art to move it, drag the corner dot (or pinch, or scroll) to resize it */
+  (function wireRoomDrag() {
+    const cv = $('wall'); let drag = null; const pts = new Map(); let pinch = null;
+    cv.style.touchAction = 'none';
+    const cur = () => state.items[state.roomIdx] || state.items[0];
+    const pos = (e) => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height }; };
+    const near = (it, e, pad) => { const R = it.box.R, p = pos(e), px = p.x * R.w, py = p.y * R.h, b = it.box; return px >= b.x - pad && px <= b.x + b.w + pad && py >= b.y - pad && py <= b.y + b.h + pad; };
+    const onHandle = (it, e) => { if (!it.handle) return false; const R = it.box.R, p = pos(e), d = Math.hypot(p.x * R.w - it.handle.x, p.y * R.h - it.handle.y); return d <= it.handle.r * 1.9; };
+    const freeze = (it, R) => { const b = it.box; it.rp = it.rp || {}; if (!it.rp[R.id]) it.rp[R.id] = { x: (b.x + b.w / 2) / R.w, y: (b.y + b.h / 2) / R.h }; };
+    const setSize = (it, w0, h0, k) => {
+      k = Math.max(0.1, Math.min(8, k));
+      it.wcm = Math.max(2, Math.min(400, Math.round(w0 * k * 10) / 10)); it.hcm = Math.max(2, Math.min(400, Math.round(h0 * k * 10) / 10)); it.sizeSet = true;
+      const i = state.items.indexOf(it), wi = document.getElementById('w' + i), hi = document.getElementById('h' + i);
+      if (wi) wi.value = Math.round(it.wcm * 10) / 10; if (hi) hi.value = Math.round(it.hcm * 10) / 10;
+      render();
+    };
+    cv.addEventListener('pointerdown', (e) => {
+      if (state.view !== 'room') return;
+      const it = cur(); if (!it || !it.box) return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const R = it.box.R;
+      if (pts.size === 2 && near(it, e, 60)) {   // two fingers: pinch to resize
+        const [a, b] = [...pts.values()]; freeze(it, R);
+        pinch = { it, d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, w0: it.wcm, h0: it.hcm }; drag = null; return;
+      }
+      if (onHandle(it, e)) {
+        freeze(it, R); const b = it.box, c = { x: b.x + b.w / 2, y: b.y + b.h / 2 };
+        drag = { it, R, mode: 'size', c, d0: Math.hypot(it.handle.x - c.x, it.handle.y - c.y) || 1, w0: it.wcm, h0: it.hcm };
+        cv.setPointerCapture(e.pointerId); e.preventDefault(); return;
+      }
+      if (!near(it, e, 14)) return;
+      const p = pos(e), b = it.box;
+      drag = { it, R, mode: 'move', dx: p.x * R.w - (b.x + b.w / 2), dy: p.y * R.h - (b.y + b.h / 2) };
+      cv.setPointerCapture(e.pointerId); cv.style.cursor = 'grabbing'; e.preventDefault();
+    });
+    cv.addEventListener('pointermove', (e) => {
+      if (pts.has(e.pointerId)) pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pinch && pts.size >= 2) { const [a, b] = [...pts.values()]; setSize(pinch.it, pinch.w0, pinch.h0, (Math.hypot(a.x - b.x, a.y - b.y) || 1) / pinch.d0); return; }
+      if (!drag) {
+        if (state.view === 'room') { const it = cur(); if (it && it.box) cv.style.cursor = onHandle(it, e) ? 'nwse-resize' : near(it, e, 0) ? 'grab' : 'default'; }
+        return;
+      }
+      const p = pos(e), R = drag.R, it = drag.it;
+      if (drag.mode === 'size') { const d = Math.hypot(p.x * R.w - drag.c.x, p.y * R.h - drag.c.y); setSize(it, drag.w0, drag.h0, d / drag.d0); return; }
+      const b = it.box;
+      let cx = (p.x * R.w - drag.dx), cy = (p.y * R.h - drag.dy);
+      cx = Math.max(b.w * 0.2, Math.min(R.w - b.w * 0.2, cx)); cy = Math.max(b.h * 0.2, Math.min(R.h - b.h * 0.2, cy));
+      it.rp = it.rp || {}; it.rp[R.id] = { x: cx / R.w, y: cy / R.h };
+      render();
+    });
+    const end = (e) => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; if (!pts.size) drag = null; cv.style.cursor = ''; };
+    cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+    cv.addEventListener('wheel', (e) => {
+      if (state.view !== 'room') return;
+      const it = cur(); if (!it || !it.box || !near(it, e, 0)) return;
+      e.preventDefault(); freeze(it, it.box.R); setSize(it, it.wcm, it.hcm, e.deltaY < 0 ? 1.06 : 1 / 1.06);
+    }, { passive: false });
+    $('roomReset').addEventListener('click', () => { const it = cur(); if (it && it.rp) { delete it.rp[currentRoom().id]; render(); } });
+  })();
+
+  function setView(v) {
+    state.view = v;
+    const room = v === 'room';
+    $('wallFs').hidden = room; $('roomFs').hidden = !room; $('saveRoomZip').hidden = !room;
+    $('saveWall').textContent = room ? 'Save this room picture' : 'Save wall picture';
+    refreshStrip(); render();
+  }
+
+  function refreshStrip() {
+    const ul = $('strip'); ul.textContent = '';
+    state.items.forEach((it, idx) => {
+      const li = document.createElement('li');
+      const c = document.createElement('canvas'); c.width = 240; c.height = 240;
+      const src = shown(it), k = Math.min(240 / src.width, 240 / src.height);
+      const w = src.width * k, h = src.height * k;
+      const cx = c.getContext('2d'); cx.imageSmoothingQuality = 'high';
+      cx.drawImage(src, (240 - w) / 2, (240 - h) / 2, w, h);
+      const tb = document.createElement('button');
+      tb.type = 'button'; tb.className = 'thumb'; tb.disabled = state.view !== 'room';
+      tb.setAttribute('aria-label', 'Show ' + (it.sample ? 'example' : it.name) + ' in the room');
+      tb.appendChild(c);
+      tb.addEventListener('click', () => { state.roomIdx = idx; refreshStrip(); render(); });
+      li.appendChild(tb);
+      if (state.view === 'room' && idx === state.roomIdx) li.classList.add('sel');
+      const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = it.sample ? 'Example' : it.name; li.appendChild(nm);
+      if (!it.sample) {
+        const b = document.createElement('div');
+        b.className = 'badge ' + (it.warn ? 'warn' : 'ok');
+        b.textContent = it.fixed ? 'Crop adjusted' : it.warn ? (it.hasFrame === false ? 'No frame. Check crop' : 'Check this crop') : 'Frame found';
+        li.appendChild(b);
+        const ti = document.createElement('input');
+        ti.type = 'text'; ti.className = 'ttl'; ti.maxLength = 60; ti.placeholder = 'Title (used in file names)'; ti.value = it.title || '';
+        ti.setAttribute('aria-label', 'Title for ' + it.name);
+        ti.addEventListener('input', () => { it.title = ti.value; });
+        li.appendChild(ti);
+        const dm = document.createElement('div'); dm.className = 'dims';
+        dm.innerHTML = '<label for="w' + idx + '">W</label><input id="w' + idx + '" type="number" inputmode="decimal" min="1" max="400" step="1" value="' + it.wcm + '"><span>\u00D7</span><label for="h' + idx + '">H</label><input id="h' + idx + '" type="number" inputmode="decimal" min="1" max="400" step="1" value="' + it.hcm + '"><span>cm</span>';
+        dm.querySelector('#w' + idx).addEventListener('input', (e) => { const v = parseFloat(e.target.value); if (v > 0) { it.wcm = v; it.sizeSet = true; render(); } });
+        dm.querySelector('#h' + idx).addEventListener('input', (e) => { const v = parseFloat(e.target.value); if (v > 0) { it.hcm = v; it.sizeSet = true; render(); } });
+        li.appendChild(dm);
+        const adj = document.createElement('button');
+        adj.type = 'button'; adj.className = 'adj'; adj.textContent = 'Adjust crop';
+        adj.addEventListener('click', () => openEditor(idx));
+        const rf = document.createElement('button');
+        rf.type = 'button'; rf.className = 'adj'; rf.textContent = 'Zoom in frame';
+        rf.addEventListener('click', () => openReframe(idx));
+        const row = document.createElement('div'); row.className = 'dims'; row.append(adj, rf);
+        li.appendChild(row);
+        const x = document.createElement('button');
+        x.type = 'button'; x.className = 'x'; x.textContent = '×'; x.setAttribute('aria-label', 'Remove ' + it.name);
+        x.addEventListener('click', () => { state.items.splice(idx, 1); if (!state.items.length) loadSample(); else changed(); });
+        li.appendChild(x);
+      }
+      ul.appendChild(li);
+    });
+  }
+
+  function changed() {
+    if (state.roomIdx >= state.items.length) state.roomIdx = 0;
+    refreshArt();
+    refreshStrip();
+    render();
+    const real = state.items.length && !state.items[0].sample;
+    $('saveWall').disabled = !real; $('saveZip').disabled = !real; $('saveRoomZip').disabled = !real;
+    $('sampleNote').hidden = !!real;
+  }
+
+  /* ---------------- example pieces so the page isn't empty ---------------- */
+  function rng(seed) { return () => { seed |= 0; seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+  function sampleItem(seed, cols) {
+    const R = rng(seed), S = 700, c = document.createElement('canvas'); c.width = c.height = S;
+    const x = c.getContext('2d');
+    x.fillStyle = cols[0]; x.fillRect(0, 0, S, S);
+    for (let i = 0; i < 9; i++) {
+      x.fillStyle = cols[1 + Math.floor(R() * (cols.length - 1))];
+      const w = 90 + R() * 330, h = 90 + R() * 330, px = R() * (S - w), py = R() * (S - h);
+      if (R() < 0.35) { x.beginPath(); x.ellipse(px + w / 2, py + h / 2, w / 2, h / 2, R() * 3, 0, 7); x.fill(); } else x.fillRect(px, py, w, h);
+    }
+    x.strokeStyle = cols[cols.length - 1]; x.lineWidth = 26; x.lineCap = 'round'; x.beginPath();
+    x.moveTo(R() * S, 0); x.bezierCurveTo(R() * S, S * 0.4, R() * S, S * 0.6, R() * S, S); x.stroke();
+    const b = 52, f = document.createElement('canvas'); f.width = f.height = S + b * 2;
+    const fx = f.getContext('2d'); fx.fillStyle = '#D9B98A'; fx.fillRect(0, 0, f.width, f.height); fx.drawImage(c, b, b);
+    return { name: 'example', sample: true, frame: f, fw: f.width, fh: f.height, op: { t: b, b, l: b, r: b }, warn: false };
+  }
+  function loadSample() {
+    state.items = [
+      sampleItem(11, ['#F1EBDD', '#E4572E', '#2E4057', '#F2B134', '#1E1E24']),
+    ];
+    changed();
+  }
+
+  /* ---------------- saving ---------------- */
+  let dl = null;
+  (async () => { try { dl = await (window.claude && window.claude.use ? window.claude.use('downloads') : null); } catch (e) { dl = null; } })();
+  let toastT = 0;
+  function toast(msg) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, 2600); }
+  async function saveFile(name, blob) {
+    if (dl) {
+      try { await dl.save({ filename: name, data: blob }); toast('Saved'); }
+      catch (e) { if (e && e.code === 'declined') return; toast('Could not save from here'); }
+      return;
+    }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }
+  const toBlob = (cv, type, q) => new Promise((res) => cv.toBlob(res, type, q));
+
+  const crcTable = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  function crc32(u8) { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = crcTable[(c ^ u8[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+  function zip(files) { // files: [{name, data:Uint8Array}] stored, no compression (jpegs are already compressed)
+    const enc = new TextEncoder(), parts = [], central = [];
+    let offset = 0;
+    const d = new Date(), dosTime = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1), dosDate = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+    for (const f of files) {
+      const nm = enc.encode(f.name), crc = crc32(f.data);
+      const lh = new DataView(new ArrayBuffer(30));
+      lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(8, 0, true);
+      lh.setUint16(10, dosTime, true); lh.setUint16(12, dosDate, true); lh.setUint32(14, crc, true);
+      lh.setUint32(18, f.data.length, true); lh.setUint32(22, f.data.length, true); lh.setUint16(26, nm.length, true); lh.setUint16(28, 0, true);
+      parts.push(lh.buffer, nm, f.data);
+      const ch = new DataView(new ArrayBuffer(46));
+      ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true); ch.setUint16(10, 0, true);
+      ch.setUint16(12, dosTime, true); ch.setUint16(14, dosDate, true); ch.setUint32(16, crc, true);
+      ch.setUint32(20, f.data.length, true); ch.setUint32(24, f.data.length, true); ch.setUint16(28, nm.length, true);
+      ch.setUint32(42, offset, true);
+      central.push(ch.buffer, nm);
+      offset += 30 + nm.length + f.data.length;
+    }
+    let csize = 0; for (let i = 0; i < central.length; i++) csize += central[i].byteLength !== undefined ? central[i].byteLength : central[i].length;
+    const end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+    end.setUint32(12, csize, true); end.setUint32(16, offset, true);
+    return new Blob([...parts, ...central, end.buffer], { type: 'application/zip' });
+  }
+
+  /* ---------------- wiring ---------------- */
+  const stem = (n) => n.replace(/\.[^.]+$/, '').trim().replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'artwork';
+  const today = () => { const d = new Date(), p = (n) => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); };
+  const slug = (t) => (t || '').trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/-{2,}/g, '-').replace(/^-+|-+$/g, '');
+  const fname = (it, what, ext) => (slug(it.title) || stem(it.name)) + '_' + Math.round(it.wcm) + 'x' + Math.round(it.hcm) + 'cm_' + today() + '_' + what + '.' + ext;
+  async function handleFiles(list) {
+    const files = [...list].filter((f) => f.type.startsWith('image/') || /\.(jpe?g|png|webp|heic)$/i.test(f.name));
+    if (!files.length) { $('status').textContent = 'Those did not look like photos. Try JPG or PNG.'; return; }
+    files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    const status = $('status'); status.className = 'busy';
+    $('pickBtn').classList.add('off');
+    const out = [];
+    for (let i = 0; i < files.length; i++) {
+      status.textContent = 'Hanging ' + (i + 1) + ' of ' + files.length + '…';
+      await new Promise((r) => setTimeout(r, 20));
+      try {
+        const it = await processFile(files[i]);
+        out.push(it);
+        if (state.items.length && state.items[0].sample) state.items = [];
+        state.items.push(it);   // on the wall straight away, no waiting for the rest
+        changed();
+        window.__hang = { items: state.items };
+      }
+      catch (e) { console.error(files[i].name, e); toast('Could not read ' + files[i].name); }
+    }
+    $('pickBtn').classList.remove('off'); status.className = '';
+    if (!out.length) { status.textContent = 'None of those could be read.'; return; }
+    const warn = out.filter((o) => o.warn).length;
+    status.textContent = warn ? out.length + ' hung. ' + warn + ' to check. Tap Adjust crop under any photo to drag the corners.' : (out.length === 1 ? 'Hung. Frame found.' : 'All ' + out.length + ' hung. Frames found on every photo.') + ' Pick more to add them to the wall.';
+    changed();
+    window.__hang = { items: state.items };
+  }
+
+  /* ---------------- crop editor: drag four corners ---------------- */
+  const ed = { it: null, bmp: null, k: 1, SW: 0, SH: 0, ds: 1, q: [], drag: -1 };
+  function edDraw() {
+    const cv = $('edCanvas'), ctx = cv.getContext('2d');
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.drawImage(ed.bmp, 0, 0, cv.width, cv.height);
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.beginPath(); ctx.rect(0, 0, cv.width, cv.height);
+    ctx.moveTo(ed.q[0][0], ed.q[0][1]); for (let i = 3; i >= 0; i--) ctx.lineTo(ed.q[i][0], ed.q[i][1]);
+    ctx.closePath(); ctx.fill('evenodd');
+    const lw = Math.max(2, cv.width / 300);
+    ctx.strokeStyle = '#FF5B1F'; ctx.lineWidth = lw; ctx.beginPath();
+    ctx.moveTo(ed.q[0][0], ed.q[0][1]); for (let i = 1; i < 4; i++) ctx.lineTo(ed.q[i][0], ed.q[i][1]); ctx.closePath(); ctx.stroke();
+    for (const [x, y] of ed.q) { ctx.beginPath(); ctx.arc(x, y, lw * 5, 0, 7); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = lw; ctx.stroke(); }
+  }
+  async function openEditor(idx) {
+    const it = state.items[idx]; if (!it || !it.file) return;
+    let bmp;
+    try { bmp = await loadBitmap(it.file); } catch (e) { toast('Could not open that photo'); return; }
+    const k = Math.min(1, MAX_SRC / Math.max(bmp.width, bmp.height));
+    ed.it = it; ed.bmp = bmp; ed.SW = Math.round(bmp.width * k); ed.SH = Math.round(bmp.height * k);
+    const cw = Math.min(ed.SW, 1100); ed.ds = cw / ed.SW;
+    const cv = $('edCanvas'); cv.width = cw; cv.height = Math.round(ed.SH * ed.ds);
+    ed.q = artQuad(it).map(([x, y]) => [x * ed.ds, y * ed.ds]);
+    $('editor').hidden = false; edDraw(); $('edDone').focus();
+  }
+  function edClose() { $('editor').hidden = true; if (ed.bmp && ed.bmp.close) ed.bmp.close(); ed.bmp = null; ed.it = null; }
+  (function wireEditor() {
+    const cv = $('edCanvas');
+    const pos = (e) => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * cv.width / r.width, (e.clientY - r.top) * cv.height / r.height]; };
+    cv.addEventListener('pointerdown', (e) => {
+      if (!ed.bmp) return;
+      const [x, y] = pos(e); let bi = -1, bd = 1e9;
+      ed.q.forEach(([qx, qy], i) => { const d = Math.hypot(qx - x, qy - y); if (d < bd) { bd = d; bi = i; } });
+      if (bd < cv.width * 0.09) { ed.drag = bi; cv.setPointerCapture(e.pointerId); e.preventDefault(); }
+    });
+    cv.addEventListener('pointermove', (e) => {
+      if (ed.drag < 0) return;
+      const [x, y] = pos(e);
+      ed.q[ed.drag] = [Math.min(cv.width, Math.max(0, x)), Math.min(cv.height, Math.max(0, y))];
+      edDraw();
+    });
+    const up = () => { ed.drag = -1; };
+    cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+    $('edCancel').addEventListener('click', edClose);
+    $('edDone').addEventListener('click', () => {
+      const it = ed.it; if (!it) return;
+      const quad = ed.q.map(([x, y]) => [x / ed.ds, y / ed.ds]);
+      const big = document.createElement('canvas'); big.width = ed.SW; big.height = ed.SH;
+      const bctx = big.getContext('2d', { willReadFrequently: true }); bctx.drawImage(ed.bmp, 0, 0, ed.SW, ed.SH);
+      const L = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+      let ow = (L(quad[0], quad[1]) + L(quad[3], quad[2])) / 2, oh = (L(quad[0], quad[3]) + L(quad[1], quad[2])) / 2;
+      if (it.sizeSet && it.wcm > 0 && it.hcm > 0) { const a = it.wcm / it.hcm, s0 = Math.sqrt(ow * oh); ow = s0 * Math.sqrt(a); oh = s0 / Math.sqrt(a); }
+      const sc = Math.min(1, MAX_RECT / Math.max(ow, oh));
+      ow = Math.max(8, Math.round(ow * sc)); oh = Math.max(8, Math.round(oh * sc));
+      const img = warp(bctx.getImageData(0, 0, ed.SW, ed.SH).data, ed.SW, ed.SH, quad, ow, oh);
+      const c = document.createElement('canvas'); c.width = ow; c.height = oh; c.getContext('2d').putImageData(img, 0, 0);
+      it.manual = c; it.manualQuad = quad; it.fixed = true; it.warn = false;
+      edClose(); big.width = big.height = 1;
+      changed();
+    });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('editor').hidden) edClose(); });
+  })();
+
+  /* ---------------- zoom and pan inside the frame ---------------- */
+  const rf = { it: null, z: 1, x: 0.5, y: 0.5, drag: null };
+  function rfDraw() {
+    const cv = $('rfCanvas'), ctx = cv.getContext('2d'), b = rf.it.base;
+    const w = b.width / rf.z, h = b.height / rf.z;
+    rf.x = Math.min(Math.max(w / 2 / b.width, rf.x), 1 - w / 2 / b.width);
+    rf.y = Math.min(Math.max(h / 2 / b.height, rf.y), 1 - h / 2 / b.height);
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(b, rf.x * b.width - w / 2, rf.y * b.height - h / 2, w, h, 0, 0, cv.width, cv.height);
+    $('rfVal').textContent = rf.z.toFixed(1) + '\u00D7';
+  }
+  function openReframe(idx) {
+    const it = state.items[idx]; if (!it || !it.base) return;
+    rf.it = it; rf.z = it.zoom || 1; rf.x = it.zx == null ? 0.5 : it.zx; rf.y = it.zy == null ? 0.5 : it.zy;
+    const cv = $('rfCanvas'), k = Math.min(1, 720 / Math.max(it.base.width, it.base.height));
+    cv.width = Math.round(it.base.width * k); cv.height = Math.round(it.base.height * k);
+    cv.style.maxHeight = '62vh'; cv.style.width = 'auto'; cv.style.maxWidth = '100%'; cv.style.margin = '0 auto';
+    $('rfZoom').value = rf.z;
+    $('reframe').hidden = false; rfDraw(); $('rfDone').focus();
+  }
+  (function wireReframe() {
+    const cv = $('rfCanvas');
+    cv.addEventListener('pointerdown', (e) => { rf.drag = { px: e.clientX, py: e.clientY, x: rf.x, y: rf.y }; cv.setPointerCapture(e.pointerId); cv.style.cursor = 'grabbing'; e.preventDefault(); });
+    cv.addEventListener('pointermove', (e) => {
+      if (!rf.drag) return;
+      const r = cv.getBoundingClientRect(), b = rf.it.base;
+      // dragging the picture right shows more of its left side
+      rf.x = rf.drag.x - ((e.clientX - rf.drag.px) / r.width) / rf.z;
+      rf.y = rf.drag.y - ((e.clientY - rf.drag.py) / r.height) / rf.z;
+      rfDraw();
+    });
+    const up = () => { rf.drag = null; cv.style.cursor = 'grab'; };
+    cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+    cv.addEventListener('wheel', (e) => { e.preventDefault(); rf.z = Math.min(4, Math.max(1, rf.z * (e.deltaY < 0 ? 1.08 : 1 / 1.08))); $('rfZoom').value = rf.z; rfDraw(); }, { passive: false });
+    $('rfZoom').addEventListener('input', (e) => { rf.z = parseFloat(e.target.value); rfDraw(); });
+    const close = () => { $('reframe').hidden = true; rf.it = null; };
+    $('rfCancel').addEventListener('click', close);
+    $('rfReset').addEventListener('click', () => { rf.z = 1; rf.x = rf.y = 0.5; $('rfZoom').value = 1; rfDraw(); });
+    $('rfDone').addEventListener('click', () => { const it = rf.it; if (!it) return; it.zoom = rf.z; it.zx = rf.x; it.zy = rf.y; close(); changed(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('reframe').hidden) close(); });
+  })();
+
+  /* ---------------- your own rooms (kept in this browser) ---------------- */
+  const store = {
+    open() { return new Promise((res, rej) => { try { const q = indexedDB.open('hangit', 1); q.onupgradeneeded = () => q.result.createObjectStore('rooms', { keyPath: 'id' }); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); } catch (e) { rej(e); } }); },
+    async all() { try { const d = await this.open(); return await new Promise((res) => { const r = d.transaction('rooms').objectStore('rooms').getAll(); r.onsuccess = () => res(r.result || []); r.onerror = () => res([]); }); } catch (e) { return []; } },
+    async put(rec) { try { const d = await this.open(); await new Promise((res) => { const t = d.transaction('rooms', 'readwrite'); t.objectStore('rooms').put(rec); t.oncomplete = res; t.onerror = res; }); } catch (e) { /* kept for this visit only */ } },
+    async del(id) { try { const d = await this.open(); await new Promise((res) => { const t = d.transaction('rooms', 'readwrite'); t.objectStore('rooms').delete(id); t.oncomplete = res; t.onerror = res; }); } catch (e) { /* ignore */ } },
+  };
+  function renderRoomSeg() {
+    const seg = $('roomSeg'); seg.textContent = '';
+    rooms.forEach((r) => {
+      const l = document.createElement('label');
+      const inp = document.createElement('input'); inp.type = 'radio'; inp.name = 'room'; inp.value = r.id; inp.checked = r.id === state.roomId;
+      const sp = document.createElement('span'); sp.textContent = r.name;
+      inp.addEventListener('change', () => { state.roomId = r.id; $('delRoom').hidden = !!r.builtin; render(); });
+      l.append(inp, sp); seg.appendChild(l);
+    });
+    $('delRoom').hidden = !!currentRoom().builtin;
+  }
+  async function hydrateRoom(rec) {
+    const bmp = await createImageBitmap(rec.blob);
+    const c = document.createElement('canvas'); c.width = rec.w; c.height = rec.h; c.getContext('2d').drawImage(bmp, 0, 0, rec.w, rec.h);
+    if (bmp.close) bmp.close();
+    return { id: rec.id, name: rec.name, w: rec.w, h: rec.h, cx: rec.cxf * rec.w, cy: rec.cyf * rec.h, pxcm: rec.pxcmf * rec.w, base: c, rec };
+  }
+  (async () => {
+    for (const rec of await store.all()) { try { rooms.push(await hydrateRoom(rec)); } catch (e) { /* skip a damaged room */ } }
+    renderRoomSeg();
+  })();
+  renderRoomSeg();
+
+  const pl = { cv: null, cxf: 0.5, cyf: 0.4, frac: 0.14, disp: 1 };
+  function plDraw() {
+    const c = $('plCanvas'), x = c.getContext('2d');
+    x.drawImage(pl.cv, 0, 0, c.width, c.height);
+    const side = pl.frac * c.width, cx = pl.cxf * c.width, cy = pl.cyf * c.height;
+    x.fillStyle = 'rgba(255,91,31,0.28)'; x.fillRect(cx - side / 2, cy - side / 2, side, side);
+    x.strokeStyle = '#FF5B1F'; x.lineWidth = Math.max(2, c.width / 300); x.strokeRect(cx - side / 2, cy - side / 2, side, side);
+    x.fillStyle = '#fff'; x.font = '600 ' + Math.max(12, side * 0.16) + 'px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillText('30 cm', cx, cy);
+  }
+  async function openPlace(file) {
+    let bmp;
+    try { bmp = await loadBitmap(file); } catch (e) { toast('Could not open that photo'); return; }
+    const k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+    const w = Math.round(bmp.width * k), h = Math.round(bmp.height * k);
+    const full = document.createElement('canvas'); full.width = w; full.height = h; full.getContext('2d').drawImage(bmp, 0, 0, w, h);
+    if (bmp.close) bmp.close();
+    pl.cv = full; pl.cxf = 0.5; pl.cyf = 0.4; pl.frac = 0.14;
+    const c = $('plCanvas'), dk = Math.min(1, 760 / w); c.width = Math.round(w * dk); c.height = Math.round(h * dk);
+    c.style.maxHeight = '58vh'; c.style.width = 'auto'; c.style.maxWidth = '100%'; c.style.margin = '0 auto';
+    $('plSize').value = pl.frac * 100; $('plName').value = 'My room';
+    $('place').hidden = false; plDraw(); $('plDone').focus();
+  }
+  (function wirePlace() {
+    const c = $('plCanvas'); let down = false;
+    const at = (e) => { const r = c.getBoundingClientRect(); pl.cxf = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)); pl.cyf = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)); plDraw(); };
+    c.addEventListener('pointerdown', (e) => { down = true; c.setPointerCapture(e.pointerId); at(e); e.preventDefault(); });
+    c.addEventListener('pointermove', (e) => { if (down) at(e); });
+    c.addEventListener('pointerup', () => { down = false; }); c.addEventListener('pointercancel', () => { down = false; });
+    $('plSize').addEventListener('input', (e) => { pl.frac = parseFloat(e.target.value) / 100; plDraw(); });
+    const close = () => { $('place').hidden = true; pl.cv = null; };
+    $('plCancel').addEventListener('click', close);
+    $('plDone').addEventListener('click', async () => {
+      const cv = pl.cv; if (!cv) return;
+      const blob = await toBlob(cv, 'image/jpeg', 0.9);
+      const rec = { id: 'u' + Date.now(), name: ($('plName').value || 'My room').trim().slice(0, 40) || 'My room', blob, w: cv.width, h: cv.height, cxf: pl.cxf, cyf: pl.cyf, pxcmf: pl.frac / 30 };
+      await store.put(rec);
+      const room = { id: rec.id, name: rec.name, w: rec.w, h: rec.h, cx: rec.cxf * rec.w, cy: rec.cyf * rec.h, pxcm: rec.pxcmf * rec.w, base: cv, rec };
+      rooms.push(room); state.roomId = room.id; close(); renderRoomSeg(); render();
+    });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('place').hidden) close(); });
+    
+    $('roomFile').addEventListener('change', (e) => { const f = e.target.files && e.target.files[0]; if (f) openPlace(f).then(() => { e.target.value = ''; }); });
+    $('delRoom').addEventListener('click', async () => {
+      const r = currentRoom(); if (r.builtin) return;
+      await store.del(r.id); rooms.splice(rooms.indexOf(r), 1); state.roomId = 'livingL'; renderRoomSeg(); render();
+    });
+  })();
+
+  if (window.matchMedia && matchMedia('(pointer: coarse)').matches) $('camBtn').hidden = false;
+  
+  $('cam').addEventListener('change', (e) => { const f = e.target.files; if (f && f.length) handleFiles(f).then(() => { e.target.value = ''; }); });
+  
+  $('file').addEventListener('change', (e) => { const f = e.target.files; if (f && f.length) handleFiles(f).then(() => { e.target.value = ''; }); });
+  const stage = $('stage');
+  ['dragenter', 'dragover'].forEach((ev) => stage.addEventListener(ev, (e) => { e.preventDefault(); stage.classList.add('drag'); }));
+  ['dragleave', 'drop'].forEach((ev) => stage.addEventListener(ev, (e) => { e.preventDefault(); stage.classList.remove('drag'); }));
+  stage.addEventListener('drop', (e) => { if (e.dataTransfer && e.dataTransfer.files.length) handleFiles(e.dataTransfer.files); });
+
+  const sw = $('swatches');
+  PALETTES.forEach((p, i) => {
+    const l = document.createElement('label');
+    l.innerHTML = '<input type="radio" name="wall" value="' + i + '"' + (i === 0 ? ' checked' : '') + ' aria-label="' + p.name + ' wall"><span style="background:' + p.wall + '"></span>';
+    l.querySelector('input').addEventListener('change', () => { state.wall = i; render(); });
+    sw.appendChild(l);
+  });
+  document.querySelectorAll('input[name=view]').forEach((r) => r.addEventListener('change', () => setView(r.value)));
+  const fr = $('frames');
+  FRAMES.forEach((f, i) => {
+    const l = document.createElement('label');
+    const bg = f.css || 'repeating-linear-gradient(45deg,var(--panel) 0 6px,var(--line) 6px 8px)';
+    l.innerHTML = '<input type="radio" name="frame" value="' + f.id + '"' + (f.id === state.frame ? ' checked' : '') + ' aria-label="' + f.name + ' frame"><span style="background:' + bg + '"></span>';
+    l.querySelector('input').addEventListener('change', () => { state.frame = f.id; $('frameName').textContent = f.name; refreshArt(); refreshStrip(); render(); });
+    fr.appendChild(l);
+  });
+  $('trim').addEventListener('input', (e) => { state.trim = parseFloat(e.target.value); refreshArt(); refreshStrip(); render(); });
+
+  $('saveWall').addEventListener('click', async () => {
+    const cv = document.createElement('canvas');
+    if (state.view === 'room') {
+      const it = state.items[state.roomIdx] || state.items[0];
+      drawRoom(cv, it);
+      await saveFile(fname(it, 'room', 'png'), await toBlob(cv, 'image/png'));
+      return;
+    }
+    cv.width = 2400; cv.height = 1600;
+    drawWall(cv, 2400, 1600, PALETTES[state.wall], state.items.map(pieceOf));
+    await saveFile('crop-and-hang-wall_' + today() + '.png', await toBlob(cv, 'image/png'));
+  });
+  $('saveRoomZip').addEventListener('click', async () => {
+    const files = [];
+    for (const it of state.items) {
+      const cv = document.createElement('canvas'); drawRoom(cv, it);
+      const blob = await toBlob(cv, 'image/jpeg', 0.93);
+      files.push({ name: fname(it, 'room', 'jpg'), data: new Uint8Array(await blob.arrayBuffer()) });
+    }
+    await saveFile('crop-and-hang-rooms_' + today() + '.zip', zip(files));
+  });
+  // Print-size version of a piece: re-cut the art straight from the original photo at its full resolution (the on-screen copy is capped at 1800px).
+  async function fullResArt(it, cap) {
+    if (!it.file || !it.H) return it.art;
+    const bmp = await loadBitmap(it.file);
+    const kk = Math.min(1, cap / Math.max(bmp.width, bmp.height));
+    const bw = Math.round(bmp.width * kk), bh = Math.round(bmp.height * kk);
+    const sc = document.createElement('canvas'); sc.width = bw; sc.height = bh;
+    const sx = sc.getContext('2d', { willReadFrequently: true }); sx.drawImage(bmp, 0, 0, bw, bh);
+    if (bmp.close) bmp.close();
+    const f = bw / it.SW;
+    const q = artQuad(it).map(([x, y]) => [x * f, y * f]);
+    const L = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+    let ow = (L(q[0], q[1]) + L(q[3], q[2])) / 2, oh = (L(q[0], q[3]) + L(q[1], q[2])) / 2;
+    if (it.manual && it.sizeSet && it.wcm > 0 && it.hcm > 0) { const a = it.wcm / it.hcm, s0 = Math.sqrt(ow * oh); ow = s0 * Math.sqrt(a); oh = s0 / Math.sqrt(a); }
+    ow = Math.max(8, Math.round(ow)); oh = Math.max(8, Math.round(oh));
+    const img = warp(sx.getImageData(0, 0, bw, bh).data, bw, bh, q, ow, oh);
+    sc.width = sc.height = 1;
+    let c = document.createElement('canvas'); c.width = ow; c.height = oh; c.getContext('2d').putImageData(img, 0, 0);
+    const z = it.zoom || 1;
+    if (z > 1.001) {
+      const w = ow / z, h = oh / z;
+      const x = Math.min(Math.max(0, (it.zx == null ? 0.5 : it.zx) * ow - w / 2), ow - w);
+      const y = Math.min(Math.max(0, (it.zy == null ? 0.5 : it.zy) * oh - h / 2), oh - h);
+      const c2 = document.createElement('canvas'); c2.width = Math.round(w); c2.height = Math.round(h);
+      const cx = c2.getContext('2d'); cx.imageSmoothingQuality = 'high'; cx.drawImage(c, x, y, w, h, 0, 0, c2.width, c2.height);
+      c.width = c.height = 1; c = c2;
+    }
+    return c;
+  }
+  // write the print density (dots per inch, from the real size you set) into the JPEG so print shops and editors know the size
+  function setJpegDpi(bytes, dpi) {
+    if (bytes.length > 20 && bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF && bytes[3] === 0xE0 && bytes[6] === 0x4A && bytes[7] === 0x46) {
+      const d = Math.max(1, Math.min(65535, Math.round(dpi)));
+      bytes[13] = 1; bytes[14] = d >> 8; bytes[15] = d & 255; bytes[16] = d >> 8; bytes[17] = d & 255;
+    }
+    return bytes;
+  }
+  $('saveZip').addEventListener('click', async () => {
+    const files = [], st = $('status'), prev = st.textContent;
+    for (let i = 0; i < state.items.length; i++) {
+      const it = state.items[i];
+      st.textContent = 'Making print-size image ' + (i + 1) + ' of ' + state.items.length + '...';
+      let cv;
+      cv = null;
+      for (const cap of [8000, 6000, 4096]) {   // biggest first; if the phone runs out of memory, step down
+        try { cv = await fullResArt(it, cap); break; } catch (e) { cv = null; }
+      }
+      if (!cv) cv = it.art;
+      const blob = await toBlob(cv, 'image/jpeg', 0.95);
+      const dpi = it.wcm > 0 ? cv.width / (it.wcm / 2.54) : 300;
+      files.push({ name: fname(it, 'print', 'jpg'), data: setJpegDpi(new Uint8Array(await blob.arrayBuffer()), dpi) });
+      if (cv !== it.art) cv.width = cv.height = 1;
+    }
+    st.textContent = prev;
+    await saveFile('crop-and-hang-print-images_' + today() + '.zip', zip(files));
+  });
+
+  loadSample();
+})();
+</script>
+
+</body>
+</html>

@@ -7,6 +7,13 @@
 <meta name="description" content="Free tool for artists: drop in photos of your artworks and Crop and Hang finds, straightens and crops each piece, then hangs them on a wall or in a room. By StudioAi.life.">
 <meta property="og:title" content="Crop and Hang by StudioAi.life">
 <meta property="og:description" content="Photo of your artwork in, straightened and hung on a wall out. Free.">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#FF5B1F">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Crop and Hang">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23FF5B1F'/%3E%3Crect x='16' y='16' width='32' height='32' fill='none' stroke='%23fff' stroke-width='5'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -147,6 +154,7 @@
 
   <div class="pick">
     <label class="btn primary" id="pickBtn" for="file">Pick photos</label>
+    <button type="button" id="installBtn" hidden>Install app</button>
     <label class="btn" id="camBtn" for="cam" hidden>Take photo</label>
     <input type="file" id="file" class="vh" accept="image/*" multiple>
     <input type="file" id="cam" class="vh" accept="image/*" capture="environment">
@@ -201,7 +209,7 @@
 
   <ul id="strip" aria-label="Cropped pieces"></ul>
   <p class="foot">Frames are found automatically. For canvases with no frame, tap Adjust crop and drag the four corners onto the art. Set each piece's real size under its photo and the wall and room are drawn to scale.</p>
-  <p class="foot" id="ver" style="opacity:.85">Crop and Hang version 22 (5 Oct 2026) · A free tool from <a href="https://studioai.life" target="_blank" rel="noopener">StudioAi.life</a> · Your photos stay on your device, nothing is uploaded.</p>
+  <p class="foot" id="ver" style="opacity:.85">Crop and Hang version 23 (5 Oct 2026): install as an app · A free tool from <a href="https://studioai.life" target="_blank" rel="noopener">StudioAi.life</a> · Your photos stay on your device, nothing is uploaded.</p>
 </div>
 <div id="toast" hidden></div>
 <div class="ed" id="place" hidden role="dialog" aria-modal="true" aria-labelledby="plTitle">
@@ -1716,6 +1724,29 @@
     st.textContent = prev;
     await saveFile('crop-and-hang-print-images_' + today() + '.zip', zip(files));
   });
+
+  /* ---------------- install as an app (PWA) ---------------- */
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
+  }
+  (() => {
+    let deferred = null;
+    const btn = document.getElementById('installBtn');
+    const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+    window.addEventListener('beforeinstallprompt', (ev) => { ev.preventDefault(); deferred = ev; if (btn && !standalone) btn.hidden = false; });
+    if (btn) btn.addEventListener('click', async () => {
+      if (!deferred) return;
+      deferred.prompt();
+      try { await deferred.userChoice; } catch (e) {}
+      deferred = null; btn.hidden = true;
+    });
+    window.addEventListener('appinstalled', () => { if (btn) btn.hidden = true; });
+    const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+    if (ios && !standalone) {
+      const f = document.getElementById('ver');
+      if (f) f.insertAdjacentHTML('afterend', '<p class="foot">To install on iPhone or iPad: tap Share, then Add to Home Screen.</p>');
+    }
+  })();
 
   loadSample();
 })();

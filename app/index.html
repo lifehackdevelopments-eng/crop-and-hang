@@ -15,10 +15,11 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23FF5B1F'/%3E%3Crect x='16' y='16' width='32' height='32' fill='none' stroke='%23fff' stroke-width='5'/%3E%3C/svg%3E">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Source+Sans+3:wght@400;600;700&display=swap">
+<link rel="preload" href="fonts/source-sans-3-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/anton-latin.woff2" as="font" type="font/woff2" crossorigin>
 <style>
+  @font-face { font-family: "Anton"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/anton-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+  @font-face { font-family: "Source Sans 3"; font-style: normal; font-weight: 200 900; font-display: swap; src: url(fonts/source-sans-3-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
   /* Layout: one column tool. Header, then the wall as the hero, then controls, then the strip of cropped pieces. */
   :root {
     --bg: #F2F1EF;
@@ -141,6 +142,12 @@
   .foot { color: var(--muted); font-size: 13px; margin: 0; }
   #toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-weight: 700; z-index: 5; }
   @media (prefers-reduced-motion: no-preference) { button { transition: background 0.12s, color 0.12s, filter 0.12s; } }
+  /* touch screens: finger-sized buttons, and text boxes at 16px so phones do not zoom the page when you tap them */
+  @media (pointer: coarse) {
+    button, label.btn, .adj { min-height: 44px; }
+    .x { width: 40px; height: 40px; min-height: 0; }
+    input[type=text], input[type=number] { font-size: 16px; min-height: 44px; }
+  }
 </style>
 </head>
 <body>
@@ -192,7 +199,7 @@
     <fieldset>
       <legend>Frame</legend>
       <div class="swatches" id="frames"></div>
-      <p class="hint" id="frameName">Original timber, as photographed</p>
+      <p class="hint" id="frameName">Original timber, shading evened out</p>
     </fieldset>
     <div>
       <label class="lbl" for="trim">Trim edges</label>
@@ -209,7 +216,7 @@
 
   <ul id="strip" aria-label="Cropped pieces"></ul>
   <p class="foot">Frames are found automatically. For canvases with no frame, tap Adjust crop and drag the four corners onto the art. Set each piece's real size under its photo and the wall and room are drawn to scale.</p>
-  <p class="foot" id="ver" style="opacity:.85">Crop and Hang version 23 (5 Oct 2026): install as an app · A free tool from <a href="https://studioai.life" target="_blank" rel="noopener">StudioAi.life</a> · Your photos stay on your device, nothing is uploaded.</p>
+  <p class="foot" id="ver" style="opacity:.85">Crop and Hang version 24 (5 Oct 2026): faster start, pinch to zoom · A free tool from <a href="https://studioai.life" target="_blank" rel="noopener">StudioAi.life</a> · Your photos stay on your device, nothing is uploaded.</p>
 </div>
 <div id="toast" hidden></div>
 <div class="ed" id="place" hidden role="dialog" aria-modal="true" aria-labelledby="plTitle">
@@ -763,7 +770,15 @@
       }
       if (last + 1 >= minD) { res[side] = last + 1; sides++; }
     }
-    return sides >= 2 ? res : null;
+    if (sides < 2) return null;
+    // A frame has the same width all round. A side lost in shadow (so not timber-coloured) takes the width of the sides we did see.
+    const seen = ['t', 'b', 'l', 'r'].filter((k) => res[k] > 0), raw = Object.assign({}, res), med = median(seen.map((k) => raw[k]));
+    const opp = { t: 'b', b: 't', l: 'r', r: 'l' };
+    for (const k of ['t', 'b', 'l', 'r']) {
+      const v = raw[k] > 0 ? raw[k] : (raw[opp[k]] > 0 ? raw[opp[k]] : med);
+      res[k] = Math.min(Math.max(v, med * 0.6), med * 1.5);
+    }
+    return res;
   }
   /* The unframed finder often lands on the inner edge of a thin frame. If timber lines the outside of all four sides, return the outer quad. */
   function timberLoose(r, g, b) {   // also catches timber that sits in shadow
@@ -954,7 +969,7 @@
   const pieceOf = (it) => { const f = footprint(it); return { c: shown(it), w: f.w, h: f.h }; };
   const FRAMES = [
     { id: 'none', name: 'None', base: null },
-    { id: 'original', name: 'Original timber, as photographed', base: null, css: 'linear-gradient(135deg,#E4C79B,#C9A56F)' },
+    { id: 'original', name: 'Original timber, shading evened out', base: null, css: 'linear-gradient(135deg,#E4C79B,#C9A56F)' },
     { id: 'black', name: 'Black', base: '#16151A', hi: '#3A3942', lo: '#08080B', css: '#16151A' },
     { id: 'white', name: 'White', base: '#F4F2EE', hi: '#FFFFFF', lo: '#CFCBC3', css: '#F4F2EE' },
     { id: 'oak', name: 'Natural oak', base: '#CFA971', hi: '#E6C896', lo: '#A5804C', css: '#CFA971' },
@@ -979,11 +994,45 @@
     return c;
   }
   // the real frame from the photo, with the (possibly zoomed or re-cropped) picture dropped into its opening
+  // Frames are usually photographed lit from one side, so two sides come out dark. Lift the darker sides to match the brightest one,
+  // so the frame reads as one piece of timber and still shows up around dark art.
+  function evenedFrame(it, r) {
+    const key = [it.frame.width, it.frame.height, Math.round(r.x), Math.round(r.y), Math.round(r.w), Math.round(r.h)].join(',');
+    if (it._even && it._evenSrc === it.frame && it._evenKey === key) return it._even;
+    const W = it.frame.width, H = it.frame.height;
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(it.frame, 0, 0);
+    const x0 = Math.round(r.x), y0 = Math.round(r.y), x1 = Math.round(r.x + r.w), y1 = Math.round(r.y + r.h);
+    if (x0 < 2 || y0 < 2 || W - x1 < 2 || H - y1 < 2) { it._even = c; it._evenSrc = it.frame; it._evenKey = key; return c; }
+    const id = x.getImageData(0, 0, W, H), d = id.data;
+    const bt = y0, bb = H - y1, bl = x0, br = W - x1, sum = [0, 0, 0, 0], cnt = [0, 0, 0, 0];
+    const sideOf = (px, py) => {   // which of the four mitred sides a pixel sits in: the side it is deepest into
+      let s = -1, m = 0; const dt = (y0 - py) / bt, db = (py - y1 + 1) / bb, dl = (x0 - px) / bl, dr = (px - x1 + 1) / br;
+      if (dt > m) { m = dt; s = 0; } if (db > m) { m = db; s = 1; } if (dl > m) { m = dl; s = 2; } if (dr > m) { s = 3; }
+      return s;
+    };
+    for (let py = 0; py < H; py += 2) for (let px = 0; px < W; px += 2) {
+      if (px >= x0 && px < x1 && py >= y0 && py < y1) continue;
+      const s = sideOf(px, py); if (s < 0) continue; const i = (py * W + px) * 4;
+      sum[s] += 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; cnt[s]++;
+    }
+    const mean = sum.map((v, k) => (cnt[k] ? v / cnt[k] : 0)), top = Math.max(...mean), low = Math.min(...mean.filter((v, k) => cnt[k]));
+    if (top > 0 && low > 0 && top / low > 1.1) {
+      const g = mean.map((v) => (v > 0 ? Math.min(2.6, Math.max(1, top / v)) : 1));
+      for (let py = 0; py < H; py++) for (let px = 0; px < W; px++) {
+        if (px >= x0 && px < x1 && py >= y0 && py < y1) continue;
+        const s = sideOf(px, py); if (s < 0 || g[s] === 1) continue; const i = (py * W + px) * 4, k = g[s];
+        d[i] = Math.min(255, d[i] * k); d[i + 1] = Math.min(255, d[i + 1] * k); d[i + 2] = Math.min(255, d[i + 2] * k);
+      }
+      x.putImageData(id, 0, 0);
+    }
+    it._even = c; it._evenSrc = it.frame; it._evenKey = key; return c;
+  }
   function withOwnFrame(it) {
     if (it.hasFrame === false || it.manual || !it.frame) return it.art;
     const r = artRect(it);
     const c = document.createElement('canvas'); c.width = it.frame.width; c.height = it.frame.height;
-    const x = c.getContext('2d'); x.drawImage(it.frame, 0, 0);
+    const x = c.getContext('2d'); x.drawImage(evenedFrame(it, r), 0, 0);
     x.imageSmoothingQuality = 'high'; x.drawImage(it.art, r.x, r.y, r.w, r.h);
     return c;
   }
@@ -1094,7 +1143,7 @@
   const ROOM_DESK = "rooms/desk.jpg";
   // The art hangs where the original painting was. 350px of that painting is 30cm, so about 11.67px per cm.
   const ROOM = { w: 1254, h: 1254, cx: 626, cy: 361, pxcm: 350 / 30, patch: [384, 108, 902, 606] };
-  const rooms = [{ id: 'desk', name: 'Study desk', builtin: true, w: ROOM.w, h: ROOM.h, cx: ROOM.cx, cy: ROOM.cy, pxcm: ROOM.pxcm, base: null, maxCm: 48 }];
+  const rooms = [{ id: 'desk', name: 'Study desk', builtin: true, w: ROOM.w, h: ROOM.h, cx: ROOM.cx, cy: ROOM.cy, pxcm: ROOM.pxcm, base: null, src: ROOM_DESK, desk: true, maxCm: 48 }];
   state.roomId = 'livingL';
 
   /* ---------------- built-in room photos ---------------- */
@@ -1114,47 +1163,57 @@
     { id: 'bedD', name: 'Dark bedroom', img: 0, cx: 655, cy: 380, by: 500, pxcm: 4.4, maxCm: 100 },
     { id: 'deskD', name: 'Dark desk', img: 1, cx: 660, cy: 360, by: 530, pxcm: 5.8, maxCm: 80 },
   ].forEach((d) => {
-    const r = { id: d.id, name: d.name, builtin: true, w: 1254, h: 1254, cx: d.cx, cy: d.cy, pxcm: d.pxcm, by: d.by, base: null, maxCm: d.maxCm, over: ' Over about ' + d.maxCm + ' cm it will crowd the furniture.' };
+    const r = { id: d.id, name: d.name, builtin: true, w: 1254, h: 1254, cx: d.cx, cy: d.cy, pxcm: d.pxcm, by: d.by, base: null, src: ROOM_IMGS[d.img], maxCm: d.maxCm, over: ' Over about ' + d.maxCm + ' cm it will crowd the furniture.' };
     rooms.push(r);
-    const im = new Image();
-    im.onload = () => { const c = document.createElement('canvas'); c.width = 1254; c.height = 1254; c.getContext('2d').drawImage(im, 0, 0, 1254, 1254); r.base = c; if (state.view === 'room') render(); };
-    im.src = ROOM_IMGS[d.img];
   });
   rooms.push(rooms.shift());   // your original desk goes last
   const currentRoom = () => rooms.find((r) => r.id === state.roomId) || rooms[0];
-  (function loadRoom() {
-    const img = new Image();
-    img.onload = () => {
-      const c = document.createElement('canvas'); c.width = ROOM.w; c.height = ROOM.h;
-      const x = c.getContext('2d', { willReadFrequently: true });
-      x.drawImage(img, 0, 0, ROOM.w, ROOM.h);
-      const [x0, y0, x1, y1] = ROOM.patch;
-      const id = x.getImageData(0, 0, ROOM.w, ROOM.h), d = id.data, W = ROOM.w;
-      const R = rng(7), FE = 10;
-      for (let y = y0; y <= y1; y++) {
-        const sy = Math.min(y, 570);   // below here the plant leaf is close, so reuse the row above
-        const L = [0, 0, 0], Rr = [0, 0, 0];
-        for (let k = 0; k < 8; k++) for (let ch = 0; ch < 3; ch++) {
-          L[ch] += d[(sy * W + x0 - 14 - k) * 4 + ch]; Rr[ch] += d[(y * W + x1 + 14 + k) * 4 + ch];
-        }
-        for (let xx = x0; xx <= x1; xx++) {
-          const t = (xx - x0) / (x1 - x0), o = (y * W + xx) * 4, n = (R() - 0.5) * 6;
-          const a = Math.min(1, Math.min(xx - x0, x1 - xx, y - y0, y1 - y) / FE);
-          for (let ch = 0; ch < 3; ch++) {
-            const v = (L[ch] * (1 - t) + Rr[ch] * t) / 8 + n;
-            d[o + ch] = d[o + ch] * (1 - a) + v * a;
-          }
+  // the original desk photo has a painting on the wall: paint the wall back over it so your art can hang there
+  function deskCanvas(img) {
+    const c = document.createElement('canvas'); c.width = ROOM.w; c.height = ROOM.h;
+    const x = c.getContext('2d', { willReadFrequently: true });
+    x.drawImage(img, 0, 0, ROOM.w, ROOM.h);
+    const [x0, y0, x1, y1] = ROOM.patch;
+    const id = x.getImageData(0, 0, ROOM.w, ROOM.h), d = id.data, W = ROOM.w;
+    const R = rng(7), FE = 10;
+    for (let y = y0; y <= y1; y++) {
+      const sy = Math.min(y, 570);   // below here the plant leaf is close, so reuse the row above
+      const L = [0, 0, 0], Rr = [0, 0, 0];
+      for (let k = 0; k < 8; k++) for (let ch = 0; ch < 3; ch++) {
+        L[ch] += d[(sy * W + x0 - 14 - k) * 4 + ch]; Rr[ch] += d[(y * W + x1 + 14 + k) * 4 + ch];
+      }
+      for (let xx = x0; xx <= x1; xx++) {
+        const t = (xx - x0) / (x1 - x0), o = (y * W + xx) * 4, n = (R() - 0.5) * 6;
+        const a = Math.min(1, Math.min(xx - x0, x1 - xx, y - y0, y1 - y) / FE);
+        for (let ch = 0; ch < 3; ch++) {
+          const v = (L[ch] * (1 - t) + Rr[ch] * t) / 8 + n;
+          d[o + ch] = d[o + ch] * (1 - a) + v * a;
         }
       }
-      x.putImageData(id, 0, 0);
-      rooms.find((r) => r.id === 'desk').base = c;
-      if (state.view === 'room') render();
-    };
-    img.src = ROOM_DESK;
-  })();
+    }
+    x.putImageData(id, 0, 0);
+    return c;
+  }
+  // Room photos load when you first open that room, not at start-up (they are about 1.3 MB between them).
+  function ensureRoom(r) {
+    if (r.base || !r.src) return Promise.resolve(r);
+    if (!r.loading) r.loading = new Promise((res) => {
+      const im = new Image(); im.decoding = 'async';
+      im.onload = () => {
+        if (r.desk) r.base = deskCanvas(im);
+        else { const c = document.createElement('canvas'); c.width = 1254; c.height = 1254; c.getContext('2d').drawImage(im, 0, 0, 1254, 1254); r.base = c; }
+        res(r); if (state.view === 'room' && currentRoom() === r) render();
+      };
+      im.onerror = () => { r.loading = null; res(r); };
+      im.src = r.src;
+    });
+    return r.loading;
+  }
+  setTimeout(() => ensureRoom(currentRoom()), 5000);   // warm up the default room once things have settled
 
   function drawRoom(cv, it, ui) {
     const R = currentRoom();
+    if (!R.base) ensureRoom(R);
     cv.width = R.w; cv.height = R.h;
     const ctx = cv.getContext('2d');
     if (!R.base || !it) { ctx.fillStyle = '#2C2E2C'; ctx.fillRect(0, 0, R.w, R.h); return; }
@@ -1520,16 +1579,30 @@
   }
   (function wireReframe() {
     const cv = $('rfCanvas');
-    cv.addEventListener('pointerdown', (e) => { rf.drag = { px: e.clientX, py: e.clientY, x: rf.x, y: rf.y }; cv.setPointerCapture(e.pointerId); cv.style.cursor = 'grabbing'; e.preventDefault(); });
+    const pts = new Map(); let pin = null;
+    const pair = () => { const [p, q] = [...pts.values()]; return Math.hypot(p.x - q.x, p.y - q.y) || 1; };
+    const grab = () => { const [p] = [...pts.values()]; rf.drag = p ? { px: p.x, py: p.y, x: rf.x, y: rf.y } : null; };
+    cv.addEventListener('pointerdown', (e) => {
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); cv.setPointerCapture(e.pointerId); cv.style.cursor = 'grabbing'; e.preventDefault();
+      if (pts.size === 2) { pin = { d0: pair(), z0: rf.z }; rf.drag = null; } else if (pts.size === 1) grab();
+    });
     cv.addEventListener('pointermove', (e) => {
+      if (!pts.has(e.pointerId)) return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pts.size >= 2 && pin) {   // two fingers: pinch to zoom
+        rf.z = Math.min(4, Math.max(1, pin.z0 * pair() / pin.d0)); $('rfZoom').value = rf.z; rfDraw(); return;
+      }
       if (!rf.drag) return;
-      const r = cv.getBoundingClientRect(), b = rf.it.base;
+      const r = cv.getBoundingClientRect();
       // dragging the picture right shows more of its left side
       rf.x = rf.drag.x - ((e.clientX - rf.drag.px) / r.width) / rf.z;
       rf.y = rf.drag.y - ((e.clientY - rf.drag.py) / r.height) / rf.z;
       rfDraw();
     });
-    const up = () => { rf.drag = null; cv.style.cursor = 'grab'; };
+    const up = (e) => {
+      pts.delete(e.pointerId); if (pts.size < 2) pin = null;
+      if (pts.size === 1) grab(); else if (!pts.size) { rf.drag = null; cv.style.cursor = 'grab'; }
+    };
     cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
     cv.addEventListener('wheel', (e) => { e.preventDefault(); rf.z = Math.min(4, Math.max(1, rf.z * (e.deltaY < 0 ? 1.08 : 1 / 1.08))); $('rfZoom').value = rf.z; rfDraw(); }, { passive: false });
     $('rfZoom').addEventListener('input', (e) => { rf.z = parseFloat(e.target.value); rfDraw(); });
@@ -1651,6 +1724,7 @@
     const cv = document.createElement('canvas');
     if (state.view === 'room') {
       const it = state.items[state.roomIdx] || state.items[0];
+      await ensureRoom(currentRoom());
       drawRoom(cv, it);
       await saveFile(fname(it, 'room', 'png'), await toBlob(cv, 'image/png'));
       return;
@@ -1661,6 +1735,7 @@
   });
   $('saveRoomZip').addEventListener('click', async () => {
     const files = [];
+    await ensureRoom(currentRoom());
     for (const it of state.items) {
       const cv = document.createElement('canvas'); drawRoom(cv, it);
       const blob = await toBlob(cv, 'image/jpeg', 0.93);
@@ -1728,6 +1803,7 @@
   /* ---------------- install as an app (PWA) ---------------- */
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
+    navigator.serviceWorker.addEventListener('message', (e) => { if (e.data === 'updated') toast('A newer version is ready. Close and reopen the app to get it.'); });
   }
   (() => {
     let deferred = null;

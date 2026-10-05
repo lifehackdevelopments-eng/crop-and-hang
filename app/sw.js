@@ -1,23 +1,28 @@
 /* Crop and Hang service worker.
-   Page itself: network first, so you always get the newest version when online.
-   Room photos, icons: cache first. Fonts: stale-while-revalidate. */
-const VERSION = 'v23';
+   The page: opens instantly from the saved copy, then quietly checks for a newer one (you get it next time you open the app).
+   Fonts, room photos, icons: saved on first use, cache first. */
+const VERSION = 'v24';
 const CORE = 'cah-core-' + VERSION;
-const RUNTIME = 'cah-runtime-' + VERSION;
-const PRECACHE = [
+const MUST = [
   './index.html', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png',
-  'rooms/desk.jpg', 'rooms/r0.jpg', 'rooms/r1.jpg', 'rooms/r2.jpg', 'rooms/r3.jpg', 'rooms/r4.jpg', 'rooms/r5.jpg'
+  'fonts/anton-latin.woff2', 'fonts/source-sans-3-latin.woff2'
 ];
+const NICE = ['rooms/desk.jpg', 'rooms/r0.jpg', 'rooms/r1.jpg', 'rooms/r2.jpg', 'rooms/r3.jpg', 'rooms/r4.jpg', 'rooms/r5.jpg'];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CORE).then((c) => c.addAll(PRECACHE)).then(() => self.skipWaiting()));
+  e.waitUntil((async () => {
+    const c = await caches.open(CORE);
+    await c.addAll(MUST);                                   // the app itself must be saved for it to install
+    await Promise.all(NICE.map((u) => c.add(u).catch(() => {})));   // room photos are a bonus: never fail the install over one
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CORE && k !== RUNTIME).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k !== CORE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -26,37 +31,35 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
+  if (url.origin !== location.origin) return;
 
-  // The page: network first, fall back to cache when offline.
-  if (url.origin === location.origin && (req.mode === 'navigate' || url.pathname.endsWith('/index.html'))) {
-    e.respondWith(
-      fetch(req).then((res) => {
-        const copy = res.clone();
-        caches.open(CORE).then((c) => c.put('./index.html', copy));
+  // The page: show the saved copy straight away, refresh it in the background.
+  if (req.mode === 'navigate' || url.pathname.endsWith('/index.html')) {
+    e.respondWith((async () => {
+      const c = await caches.open(CORE);
+      const hit = await c.match('./index.html');
+      const net = fetch(req).then(async (res) => {
+        if (res && res.ok) {
+          const old = hit && hit.headers.get('content-length');
+          await c.put('./index.html', res.clone());
+          if (hit && old && res.headers.get('content-length') && old !== res.headers.get('content-length')) {
+            (await self.clients.matchAll()).forEach((cl) => cl.postMessage('updated'));
+          }
+        }
         return res;
-      }).catch(() => caches.match('./index.html'))
-    );
+      });
+      if (hit) { e.waitUntil(net.catch(() => {})); return hit; }
+      return net.catch(() => caches.match('./index.html'));
+    })());
     return;
   }
 
-  // Our own files (rooms, icons, manifest): cache first.
-  if (url.origin === location.origin && url.pathname.startsWith('/app/')) {
+  // Our own files (fonts, rooms, icons, manifest): cache first.
+  if (url.pathname.startsWith('/app/')) {
     e.respondWith(
       caches.match(req).then((hit) => hit || fetch(req).then((res) => {
-        const copy = res.clone();
-        caches.open(CORE).then((c) => c.put(req, copy));
+        if (res && res.ok) { const copy = res.clone(); caches.open(CORE).then((c) => c.put(req, copy)); }
         return res;
-      }))
-    );
-    return;
-  }
-
-  // Google Fonts: serve cached, refresh in background.
-  if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
-    e.respondWith(
-      caches.open(RUNTIME).then((c) => c.match(req).then((hit) => {
-        const net = fetch(req).then((res) => { c.put(req, res.clone()); return res; }).catch(() => hit);
-        return hit || net;
       }))
     );
   }
